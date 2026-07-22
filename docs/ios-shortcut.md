@@ -151,6 +151,23 @@ Duplicate **Vault Lookup**, delete everything after *Receive input*, and add a
 single **Run JavaScript on Web Page** action containing the script. Name it
 **Vault Fill**. Trigger it from **Share → Vault Fill** on the login page.
 
+### The vault Autofill button (pick the exact login)
+
+Each item in the vault list has an **Autofill** (wand) button. Tapping it opens
+the item's website in Safari *and* stages that exact credential on the server
+for ~60s. When you then run the filler on the opened page, the vault hands it
+the staged item directly instead of guessing by Origin — so multi-account
+sites and entries whose stored URL doesn't quite match still fill the right
+login. The staged item is only ever released if the page's domain matches the
+item's, and it is consumed on first use, so it never widens what the filler can
+read. If nothing is staged (or it has expired), the filler falls back to the
+normal Origin match.
+
+Note this still needs the one tap on the destination page to run the filler —
+a web page cannot inject script into another site's page, so the vault button
+can open and stage, but only a bookmarklet / Shortcut / native extension
+running *in* that page can do the fill.
+
 ### When it can't fill
 
 Hardened sites (some banks, Google) send a strict `connect-src` Content

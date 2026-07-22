@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Item;
 use App\Models\User;
 use App\Models\Vault;
+use App\Support\Domain;
 use App\Support\Totp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
@@ -23,8 +25,9 @@ use Illuminate\Support\Str;
  *  - fill_token (`--fill`, passed as ?token=): embedded in a web page by the
  *    filler. It has higher exposure, so it is Origin-scoped — it ignores any
  *    caller-supplied query and only ever returns the credential for the
- *    request's real browser Origin, which page JS cannot forge. Rotate it
- *    independently of the device token.
+ *    request's real browser Origin, which page JS cannot forge. It also
+ *    honours an item staged by the vault "Autofill" button when that item's
+ *    domain matches the Origin. Rotate it independently of the device token.
  *
  * Reachable only over Tailscale (RequireLocalNetwork).
  */
@@ -49,6 +52,7 @@ class LookupController extends Controller
             return response()->json(['message' => 'Invalid token.'], 401);
         }
 
+        $includePasswords = (bool) config('vault.api_returns_passwords');
         $viaFillToken = $user->fill_token !== null && hash_equals($user->fill_token, $token);
 
         if ($viaFillToken) {
@@ -63,7 +67,14 @@ class LookupController extends Controller
                 );
             }
 
-            $needle = $this->registrableDomain($host);
+            $needle = Domain::registrable($host);
+
+            // The vault "Autofill" button stages the exact item the user picked.
+            // Honour it only when the page's domain matches the staged item's,
+            // then consume it (single use); otherwise fall through to search.
+            if ($staged = $this->takeStagedItem($user, $needle)) {
+                return $this->matches([$staged], $includePasswords);
+            }
         } else {
             $query = trim((string) $request->query('url', $request->query('q', '')));
 
@@ -72,12 +83,10 @@ class LookupController extends Controller
             }
 
             // A full URL is matched by host (www. stripped); anything else is a
-            // plain name/url/username substring search.
+            // plain name/url substring search.
             $host = parse_url(Str::startsWith($query, ['http://', 'https://']) ? $query : "https://{$query}", PHP_URL_HOST);
             $needle = $host ? preg_replace('/^www\./', '', strtolower($host)) : strtolower($query);
         }
-
-        $includePasswords = (bool) config('vault.api_returns_passwords');
 
         $items = Item::query()
             ->whereIn('vault_id', Vault::forUser($user)->pluck('id'))
@@ -87,46 +96,46 @@ class LookupController extends Controller
             })
             ->orderBy('name')
             ->limit(10)
-            ->get()
-            ->map(fn (Item $item) => array_filter([
-                'id' => $item->id,
-                'name' => $item->name,
-                'url' => $item->url,
-                'username' => $item->username,
-                'password' => $includePasswords ? $item->password : null,
-                'totp' => $item->totp_secret !== null ? Totp::code($item->totp_secret) : null,
-            ], fn ($value) => $value !== null));
+            ->get();
 
-        return response()
-            ->json(['matches' => $items])
-            ->header('Cache-Control', 'no-store, private');
+        return $this->matches($items, $includePasswords);
     }
 
     /**
-     * Reduce a host to its registrable domain (eTLD+1) so the filler matches
-     * `accounts.google.com` against a stored `google.com`. Uses a short list of
-     * common two-level public suffixes rather than the full Public Suffix List;
-     * good enough for a household vault, and only affects the fill-token path.
+     * Pull and consume the item staged for this user, but only if its domain
+     * matches the requesting page. Returns null when nothing valid is staged.
      */
-    private function registrableDomain(string $host): string
+    private function takeStagedItem(User $user, string $domain): ?Item
     {
-        $host = preg_replace('/^www\./', '', strtolower($host));
-        $labels = explode('.', $host);
+        $staged = Cache::get("fill_stage:{$user->id}");
 
-        if (count($labels) <= 2) {
-            return $host;
+        if (! is_array($staged) || ($staged['domain'] ?? null) !== $domain) {
+            return null;
         }
 
-        $twoLevel = [
-            'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'me.uk',
-            'co.jp', 'com.au', 'net.au', 'org.au', 'co.nz',
-            'co.za', 'com.br', 'com.mx', 'co.in', 'com.sg',
-        ];
+        Cache::forget("fill_stage:{$user->id}");
 
-        $lastTwo = implode('.', array_slice($labels, -2));
+        return Item::query()
+            ->whereIn('vault_id', Vault::forUser($user)->pluck('id'))
+            ->find($staged['item_id']);
+    }
 
-        return in_array($lastTwo, $twoLevel, true)
-            ? implode('.', array_slice($labels, -3))
-            : $lastTwo;
+    /**
+     * @param  iterable<Item>  $items
+     */
+    private function matches(iterable $items, bool $includePasswords): JsonResponse
+    {
+        $data = collect($items)->map(fn (Item $item) => array_filter([
+            'id' => $item->id,
+            'name' => $item->name,
+            'url' => $item->url,
+            'username' => $item->username,
+            'password' => $includePasswords ? $item->password : null,
+            'totp' => $item->totp_secret !== null ? Totp::code($item->totp_secret) : null,
+        ], fn ($value) => $value !== null))->values();
+
+        return response()
+            ->json(['matches' => $data])
+            ->header('Cache-Control', 'no-store, private');
     }
 }

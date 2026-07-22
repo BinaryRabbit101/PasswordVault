@@ -44,4 +44,17 @@ return [
 
     'api_returns_passwords' => (bool) env('VAULT_API_RETURNS_PASSWORDS', true),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Autofill staging
+    |--------------------------------------------------------------------------
+    |
+    | Seconds the "Autofill" button's staged item is honoured by the in-page
+    | filler before it expires. Kept short — it only needs to survive the hop
+    | from tapping Autofill to running the filler on the opened page.
+    |
+    */
+
+    'fill_stage_seconds' => (int) env('VAULT_FILL_STAGE_SECONDS', 60),
+
 ];

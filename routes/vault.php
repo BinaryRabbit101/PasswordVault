@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\Vault\ExportController;
+use App\Http\Controllers\Vault\FillStageController;
 use App\Http\Controllers\Vault\ImportController;
 use App\Http\Controllers\Vault\ItemController;
 use App\Http\Controllers\Vault\VaultController;
@@ -24,6 +25,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('items/{item}', [ItemController::class, 'update'])->name('items.update');
     Route::delete('items/{item}', [ItemController::class, 'destroy'])->name('items.destroy');
     Route::get('items/{item}/secrets', [ItemController::class, 'secrets'])->name('items.secrets');
+
+    Route::post('fill/stage', [FillStageController::class, 'store'])->name('fill.stage');
 
     Route::post('vaults', [VaultController::class, 'store'])->name('vaults.store');
     Route::put('vaults/{vault}', [VaultController::class, 'update'])->name('vaults.update');

@@ -1,5 +1,6 @@
 import { usePage } from '@inertiajs/vue3';
 import { onMounted, ref } from 'vue';
+import { csrfHeaders } from '@/lib/csrf';
 
 /**
  * Web Push subscription helper (ported from LittlePocketMeseum).
@@ -15,28 +16,15 @@ import { onMounted, ref } from 'vue';
 // Web Push needs the VAPID public key as a Uint8Array, not base64.
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const base64 = (base64String + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
     const rawData = window.atob(base64);
     const output = new Uint8Array(rawData.length);
     for (let i = 0; i < rawData.length; ++i) {
         output[i] = rawData.charCodeAt(i);
     }
     return output;
-}
-
-function getCookie(name: string): string | null {
-    const match = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
-    return match ? decodeURIComponent(match[2]) : null;
-}
-
-// Laravel accepts the (encrypted) XSRF-TOKEN cookie value in this header.
-function csrfHeaders(): Record<string, string> {
-    const token = getCookie('XSRF-TOKEN');
-    return {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...(token ? { 'X-XSRF-TOKEN': token } : {}),
-    };
 }
 
 export function usePush() {
@@ -77,7 +65,8 @@ export function usePush() {
         error.value = null;
 
         if (!isSupported.value) {
-            error.value = 'Push notifications are not supported in this browser.';
+            error.value =
+                'Push notifications are not supported in this browser.';
             return false;
         }
 
@@ -100,7 +89,9 @@ export function usePush() {
             if (!sub) {
                 sub = await reg.pushManager.subscribe({
                     userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource,
+                    applicationServerKey: urlBase64ToUint8Array(
+                        vapidPublicKey,
+                    ) as BufferSource,
                 });
             }
 
@@ -109,8 +100,11 @@ export function usePush() {
             // ['aesgcm', 'aes128gcm'] with the deprecated one first, so we must
             // pick aes128gcm explicitly rather than just taking index 0.
             const supportedEncodings =
-                (PushManager as unknown as { supportedContentEncodings?: string[] })
-                    .supportedContentEncodings ?? [];
+                (
+                    PushManager as unknown as {
+                        supportedContentEncodings?: string[];
+                    }
+                ).supportedContentEncodings ?? [];
             const contentEncoding = supportedEncodings.includes('aes128gcm')
                 ? 'aes128gcm'
                 : (supportedEncodings[0] ?? 'aes128gcm');
@@ -130,7 +124,10 @@ export function usePush() {
             isSubscribed.value = true;
             return true;
         } catch (e) {
-            error.value = e instanceof Error ? e.message : 'Failed to enable notifications.';
+            error.value =
+                e instanceof Error
+                    ? e.message
+                    : 'Failed to enable notifications.';
             return false;
         } finally {
             isBusy.value = false;
@@ -157,7 +154,10 @@ export function usePush() {
             isSubscribed.value = false;
             return true;
         } catch (e) {
-            error.value = e instanceof Error ? e.message : 'Failed to disable notifications.';
+            error.value =
+                e instanceof Error
+                    ? e.message
+                    : 'Failed to disable notifications.';
             return false;
         } finally {
             isBusy.value = false;
@@ -166,5 +166,14 @@ export function usePush() {
 
     onMounted(refresh);
 
-    return { isSupported, isSubscribed, permission, isBusy, error, subscribe, unsubscribe, refresh };
+    return {
+        isSupported,
+        isSubscribed,
+        permission,
+        isBusy,
+        error,
+        subscribe,
+        unsubscribe,
+        refresh,
+    };
 }

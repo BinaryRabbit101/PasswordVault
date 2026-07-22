@@ -3,6 +3,7 @@
 use App\Models\Item;
 use App\Models\User;
 use App\Support\Totp;
+use Illuminate\Support\Facades\Cache;
 
 test('lookup requires a valid device token', function () {
     $this->getJson('/api/lookup?q=test')->assertUnauthorized();
@@ -121,4 +122,55 @@ test('fill token without an Origin header is rejected', function () {
 
     $this->getJson('/api/lookup?token='.str_repeat('f', 48))
         ->assertStatus(422);
+});
+
+test('a staged item is returned exactly and consumed on first use', function () {
+    $user = User::factory()->create();
+    $user->forceFill(['fill_token' => str_repeat('g', 48)])->save();
+
+    $picked = Item::factory()->create([
+        'vault_id' => $user->personalVault()->id,
+        'name' => 'Work Google',
+        'url' => 'https://google.com',
+        'username' => 'work@example.com',
+    ]);
+    // Second account on the same domain — an Origin-only match is ambiguous.
+    Item::factory()->create([
+        'vault_id' => $user->personalVault()->id,
+        'name' => 'Personal Google',
+        'url' => 'https://google.com',
+        'username' => 'me@example.com',
+    ]);
+
+    Cache::put("fill_stage:{$user->id}", ['item_id' => $picked->id, 'domain' => 'google.com'], now()->addMinute());
+
+    $this->getJson('/api/lookup?token='.str_repeat('g', 48), ['Origin' => 'https://accounts.google.com'])
+        ->assertOk()
+        ->assertJsonCount(1, 'matches')
+        ->assertJsonPath('matches.0.username', 'work@example.com');
+
+    // Consumed — the next run falls back to the ambiguous two-account search.
+    expect(Cache::get("fill_stage:{$user->id}"))->toBeNull();
+
+    $this->getJson('/api/lookup?token='.str_repeat('g', 48), ['Origin' => 'https://accounts.google.com'])
+        ->assertOk()
+        ->assertJsonCount(2, 'matches');
+});
+
+test('a staged item is ignored (and left intact) when the page domain differs', function () {
+    $user = User::factory()->create();
+    $user->forceFill(['fill_token' => str_repeat('h', 48)])->save();
+
+    $bank = Item::factory()->create([
+        'vault_id' => $user->personalVault()->id,
+        'url' => 'https://bank.example',
+    ]);
+
+    Cache::put("fill_stage:{$user->id}", ['item_id' => $bank->id, 'domain' => 'bank.example'], now()->addMinute());
+
+    $this->getJson('/api/lookup?token='.str_repeat('h', 48), ['Origin' => 'https://mail.test'])
+        ->assertOk()
+        ->assertJsonCount(0, 'matches');
+
+    expect(Cache::get("fill_stage:{$user->id}"))->not->toBeNull();
 });

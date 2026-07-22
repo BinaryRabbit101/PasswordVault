@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Copy, KeyRound, Star } from '@lucide/vue';
+import { Copy, KeyRound, Star, WandSparkles } from '@lucide/vue';
 import { computed } from 'vue';
 import type { VaultItem } from '@/types/vault';
 
@@ -11,6 +11,7 @@ const emit = defineEmits<{
     open: [];
     copyUsername: [];
     copyPassword: [];
+    autofill: [];
 }>();
 
 const AVATAR_CLASSES = [
@@ -68,6 +69,18 @@ const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
             </span>
         </button>
 
+        <a
+            v-if="item.url"
+            :href="item.url"
+            target="_blank"
+            rel="noopener"
+            class="rounded-md p-2 text-muted-foreground hover:bg-background hover:text-foreground"
+            title="Open site & autofill"
+            @click="emit('autofill')"
+        >
+            <WandSparkles class="size-4" />
+            <span class="sr-only">Open site and autofill</span>
+        </a>
         <button
             v-if="item.username"
             type="button"

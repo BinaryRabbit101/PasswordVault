@@ -2,12 +2,14 @@
 import { Head } from '@inertiajs/vue3';
 import { Plus, Search, Star } from '@lucide/vue';
 import { computed, ref } from 'vue';
+import { toast } from 'vue-sonner';
 import ItemRow from '@/components/vault/ItemRow.vue';
 import ItemSheet from '@/components/vault/ItemSheet.vue';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAutoLock } from '@/composables/useAutoLock';
 import { useClipboard } from '@/composables/useClipboard';
+import { csrfHeaders } from '@/lib/csrf';
 import { secrets } from '@/routes/items';
 import { index as vaultIndex } from '@/routes/vault';
 import type { VaultItem, VaultSummary } from '@/types/vault';
@@ -40,14 +42,17 @@ const filteredItems = computed(() => {
     const query = search.value.trim().toLowerCase();
 
     return props.items.filter((item) => {
-        if (activeVaultId.value !== null && item.vault_id !== activeVaultId.value) {
+        if (
+            activeVaultId.value !== null &&
+            item.vault_id !== activeVaultId.value
+        ) {
             return false;
         }
 
         if (query === '') return true;
 
-        return [item.name, item.url, item.username, item.folder].some(
-            (value) => value?.toLowerCase().includes(query),
+        return [item.name, item.url, item.username, item.folder].some((value) =>
+            value?.toLowerCase().includes(query),
         );
     });
 });
@@ -103,13 +108,34 @@ const copyPassword = (item: VaultItem) => {
             .then((data: { password: string | null }) => data.password ?? ''),
     );
 };
+
+// The row's <a> opens the site; we stage this exact item so the in-page filler
+// fills this credential (not an Origin guess) when you run it on that page.
+const autofill = (item: VaultItem) => {
+    if (!item.url) {
+        return;
+    }
+
+    void fetch('/fill/stage', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        credentials: 'same-origin',
+        body: JSON.stringify({ item_id: item.id }),
+    });
+
+    toast.success(
+        `Opening ${item.name} — run Vault Fill on the page to complete.`,
+    );
+};
 </script>
 
 <template>
     <Head title="Vault" />
 
     <div class="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-4">
-        <div class="sticky top-0 z-10 -mx-4 space-y-3 bg-background px-4 pt-1 pb-3">
+        <div
+            class="sticky top-0 z-10 -mx-4 space-y-3 bg-background px-4 pt-1 pb-3"
+        >
             <div class="relative">
                 <Search
                     class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -128,7 +154,11 @@ const copyPassword = (item: VaultItem) => {
                 <button
                     type="button"
                     class="shrink-0 rounded-full border px-3 py-1 text-sm transition-colors"
-                    :class="activeVaultId === null ? 'border-primary bg-primary text-primary-foreground' : 'border-input text-muted-foreground hover:bg-accent'"
+                    :class="
+                        activeVaultId === null
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-input text-muted-foreground hover:bg-accent'
+                    "
                     @click="activeVaultId = null"
                 >
                     All
@@ -138,7 +168,11 @@ const copyPassword = (item: VaultItem) => {
                     :key="vault.id"
                     type="button"
                     class="shrink-0 rounded-full border px-3 py-1 text-sm transition-colors"
-                    :class="activeVaultId === vault.id ? 'border-primary bg-primary text-primary-foreground' : 'border-input text-muted-foreground hover:bg-accent'"
+                    :class="
+                        activeVaultId === vault.id
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-input text-muted-foreground hover:bg-accent'
+                    "
                     @click="activeVaultId = vault.id"
                 >
                     {{ vault.name }}
@@ -160,6 +194,7 @@ const copyPassword = (item: VaultItem) => {
                 @open="openItem(item)"
                 @copy-username="copyUsername(item)"
                 @copy-password="copyPassword(item)"
+                @autofill="autofill(item)"
             />
         </section>
 
@@ -174,6 +209,7 @@ const copyPassword = (item: VaultItem) => {
                 @open="openItem(item)"
                 @copy-username="copyUsername(item)"
                 @copy-password="copyPassword(item)"
+                @autofill="autofill(item)"
             />
         </section>
 
@@ -181,7 +217,11 @@ const copyPassword = (item: VaultItem) => {
             v-if="filteredItems.length === 0"
             class="py-16 text-center text-muted-foreground"
         >
-            {{ items.length === 0 ? 'Your vault is empty. Add your first item or import from LastPass.' : 'No items match your search.' }}
+            {{
+                items.length === 0
+                    ? 'Your vault is empty. Add your first item or import from LastPass.'
+                    : 'No items match your search.'
+            }}
         </p>
 
         <Button
