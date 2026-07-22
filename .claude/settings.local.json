@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/Users/binar/Documents/websites\"; echo \"=== RequireLocalNetwork middleware ===\"; find . -iname \"RequireLocalNetwork*\" -not -path \"*/vendor/*\" -not -path \"*/node_modules/*\" 2>/dev/null; echo \"=== scriptable widget docs/js ===\"; grep -rilE \"scriptable\" --include=*.md --include=*.js --include=*.txt LittlePocketMeseum/docs LittlePocketMeseum/notes* NorthernCall_v2 2>/dev/null | grep -viE \"node_modules|vendor\" | head; echo; ls LittlePocketMeseum/docs 2>/dev/null; echo \"=== LPM notes ===\"; ls NorthernCall_v2/*.txt 2>/dev/null)"
+    ]
+  }
+}

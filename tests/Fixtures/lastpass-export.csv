@@ -1,0 +1,7 @@
+url,username,password,totp,extra,name,grouping,fav
+https://example.com,user@example.com,hunter2,,Simple note,Example,Sites,0
+"https://bank.test","jane","p@ss,word",JBSWY3DPEHPK3PXP,"Multi-line
+note with ""quotes"" and, commas",My Bank,Finance\Banks,1
+http://sn,,,,"The wifi password is on the router.",Home WiFi,Notes,0
+https://noname.test,sam,secret123,,,,Sites,0
+,orphan,lonelypass,,,,,0
