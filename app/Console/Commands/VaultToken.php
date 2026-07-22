@@ -10,9 +10,10 @@ class VaultToken extends Command
 {
     protected $signature = 'vault:token
         {user : Email address of the user}
-        {--rotate : Replace any existing token (revokes the old one)}';
+        {--rotate : Replace any existing token (revokes the old one)}
+        {--fill : Target the in-page autofill filler token instead of the device token}';
 
-    protected $description = 'Mint or rotate the device token used by the iOS Shortcut / widget API';
+    protected $description = 'Mint or rotate a token used by the iOS Shortcut / widget API';
 
     public function handle(): int
     {
@@ -25,17 +26,20 @@ class VaultToken extends Command
             return self::FAILURE;
         }
 
-        if ($user->device_token !== null && ! $this->option('rotate')) {
+        $column = $this->option('fill') ? 'fill_token' : 'device_token';
+        $label = $this->option('fill') ? 'Fill token' : 'Device token';
+
+        if ($user->{$column} !== null && ! $this->option('rotate')) {
             $this->info('A token already exists. Use --rotate to replace it.');
-            $this->line($user->device_token);
+            $this->line($user->{$column});
 
             return self::SUCCESS;
         }
 
-        $user->forceFill(['device_token' => Str::random(48)])->save();
+        $user->forceFill([$column => Str::random(48)])->save();
 
-        $this->info("Device token for {$user->name}:");
-        $this->line($user->device_token);
+        $this->info("{$label} for {$user->name}:");
+        $this->line($user->{$column});
 
         return self::SUCCESS;
     }

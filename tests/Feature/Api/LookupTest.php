@@ -70,3 +70,55 @@ test('passwords are omitted when the config flag is off', function () {
         ->assertJsonPath('matches.0.name', 'Example')
         ->assertJsonMissingPath('matches.0.password');
 });
+
+test('fill token matches the request Origin across subdomains', function () {
+    $user = User::factory()->create();
+    $user->forceFill(['fill_token' => str_repeat('d', 48)])->save();
+
+    Item::factory()->create([
+        'vault_id' => $user->personalVault()->id,
+        'name' => 'Example',
+        'url' => 'https://www.example.com/login',
+        'username' => 'jane',
+        'password' => 'hunter2',
+    ]);
+
+    // Origin is a login subdomain; the stored url is the bare domain.
+    $this->getJson('/api/lookup?token='.str_repeat('d', 48), ['Origin' => 'https://accounts.example.com'])
+        ->assertOk()
+        ->assertJsonCount(1, 'matches')
+        ->assertJsonPath('matches.0.username', 'jane')
+        ->assertJsonPath('matches.0.password', 'hunter2');
+});
+
+test('fill token ignores a caller-supplied url and scopes to the Origin', function () {
+    $user = User::factory()->create();
+    $user->forceFill(['fill_token' => str_repeat('e', 48)])->save();
+
+    Item::factory()->create([
+        'vault_id' => $user->personalVault()->id,
+        'name' => 'Bank',
+        'url' => 'https://bank.example/login',
+        'password' => 'secret',
+    ]);
+    Item::factory()->create([
+        'vault_id' => $user->personalVault()->id,
+        'name' => 'Mail',
+        'url' => 'https://mail.test/login',
+        'password' => 'other',
+    ]);
+
+    // Attacker-controlled page is mail.test but tries to pull bank.example.
+    $this->getJson('/api/lookup?token='.str_repeat('e', 48).'&url=https://bank.example', ['Origin' => 'https://mail.test'])
+        ->assertOk()
+        ->assertJsonCount(1, 'matches')
+        ->assertJsonPath('matches.0.name', 'Mail');
+});
+
+test('fill token without an Origin header is rejected', function () {
+    $user = User::factory()->create();
+    $user->forceFill(['fill_token' => str_repeat('f', 48)])->save();
+
+    $this->getJson('/api/lookup?token='.str_repeat('f', 48))
+        ->assertStatus(422);
+});
