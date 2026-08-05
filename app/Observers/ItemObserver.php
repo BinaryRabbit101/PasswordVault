@@ -24,6 +24,21 @@ class ItemObserver
         $this->notifyOthers($item, 'added');
     }
 
+    public function updating(Item $item): void
+    {
+        if (! $item->isDirty('password')) {
+            return;
+        }
+
+        $previous = $item->getOriginal('password');
+
+        if ($previous === null || $previous === '') {
+            return;
+        }
+
+        $item->passwordHistories()->create(['password' => $previous]);
+    }
+
     public function updated(Item $item): void
     {
         $this->notifyOthers($item, 'updated');

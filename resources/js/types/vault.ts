@@ -30,3 +30,9 @@ export interface ItemSecrets {
     notes: string | null;
     fields: ItemCustomField[];
 }
+
+export interface PasswordHistoryEntry {
+    id: number;
+    password: string;
+    created_at: string;
+}

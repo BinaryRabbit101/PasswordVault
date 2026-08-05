@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Observers\ItemObserver;
+use Carbon\CarbonImmutable;
+use Database\Factories\ItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,7 +12,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Carbon\CarbonImmutable;
 
 /**
  * @property int $id
@@ -36,7 +37,7 @@ use Carbon\CarbonImmutable;
 #[ObservedBy(ItemObserver::class)]
 class Item extends Model
 {
-    /** @use HasFactory<\Database\Factories\ItemFactory> */
+    /** @use HasFactory<ItemFactory> */
     use HasFactory, SoftDeletes;
 
     /**
@@ -92,5 +93,13 @@ class Item extends Model
     public function fields(): HasMany
     {
         return $this->hasMany(ItemField::class)->orderBy('sort_order');
+    }
+
+    /**
+     * @return HasMany<ItemPasswordHistory, $this>
+     */
+    public function passwordHistories(): HasMany
+    {
+        return $this->hasMany(ItemPasswordHistory::class)->latest('created_at');
     }
 }

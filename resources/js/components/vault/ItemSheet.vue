@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { router, useForm } from '@inertiajs/vue3';
-import { Eye, EyeOff, Plus, Star, Trash2, X } from '@lucide/vue';
+import { Eye, EyeOff, History, Plus, Star, Trash2, X } from '@lucide/vue';
 import { computed, ref, watch } from 'vue';
-import PasswordGenerator from '@/components/vault/PasswordGenerator.vue';
-import TotpCode from '@/components/vault/TotpCode.vue';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -14,11 +19,20 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import PasswordGenerator from '@/components/vault/PasswordGenerator.vue';
+import TotpCode from '@/components/vault/TotpCode.vue';
 import { useClipboard } from '@/composables/useClipboard';
-import { destroy, secrets, store, update } from '@/routes/items';
+import {
+    destroy,
+    passwordHistory,
+    secrets,
+    store,
+    update,
+} from '@/routes/items';
 import type {
     ItemCustomField,
     ItemSecrets,
+    PasswordHistoryEntry,
     VaultItem,
     VaultSummary,
 } from '@/types/vault';
@@ -40,6 +54,11 @@ const editing = ref(false);
 const showPassword = ref(false);
 const showGenerator = ref(false);
 const loadedSecrets = ref<ItemSecrets | null>(null);
+
+const showHistory = ref(false);
+const historyLoading = ref(false);
+const history = ref<PasswordHistoryEntry[]>([]);
+const revealedHistoryIds = ref(new Set<number>());
 
 const FIELD_TYPES: ItemCustomField['type'][] = [
     'text',
@@ -94,6 +113,21 @@ const fetchSecrets = async (itemId: number): Promise<ItemSecrets> => {
     return response.json();
 };
 
+const fetchPasswordHistory = async (
+    itemId: number,
+): Promise<{ history: PasswordHistoryEntry[] }> => {
+    const response = await fetch(passwordHistory.url(itemId), {
+        headers: { Accept: 'application/json' },
+        credentials: 'same-origin',
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to load password history (${response.status})`);
+    }
+
+    return response.json();
+};
+
 watch(
     () => props.open,
     async (open) => {
@@ -101,10 +135,15 @@ watch(
         showPassword.value = false;
         showGenerator.value = false;
         loadedSecrets.value = null;
+        showHistory.value = false;
+        history.value = [];
+        revealedHistoryIds.value = new Set();
         form.reset();
         form.clearErrors();
 
-        if (!open) return;
+        if (!open) {
+            return;
+        }
 
         if (props.item) {
             try {
@@ -120,7 +159,9 @@ watch(
 );
 
 const startEditing = () => {
-    if (!props.item || !loadedSecrets.value) return;
+    if (!props.item || !loadedSecrets.value) {
+        return;
+    }
 
     form.vault_id = props.item.vault_id;
     form.name = props.item.name;
@@ -150,8 +191,15 @@ const submit = () => {
 };
 
 const deleteItem = () => {
-    if (!props.item) return;
-    if (!window.confirm(`Delete "${props.item.name}"? It can be restored from the database if needed.`)) {
+    if (!props.item) {
+        return;
+    }
+
+    if (
+        !window.confirm(
+            `Delete "${props.item.name}"? It can be restored from the database if needed.`,
+        )
+    ) {
         return;
     }
 
@@ -178,6 +226,47 @@ const copyPassword = () => {
 const maskedPassword = computed(() =>
     loadedSecrets.value?.password ? '••••••••••••' : '—',
 );
+
+const openHistory = async () => {
+    if (!props.item) {
+        return;
+    }
+
+    showHistory.value = true;
+    revealedHistoryIds.value = new Set();
+    historyLoading.value = true;
+
+    try {
+        const data = await fetchPasswordHistory(props.item.id);
+        history.value = data.history;
+    } catch {
+        history.value = [];
+    } finally {
+        historyLoading.value = false;
+    }
+};
+
+const toggleHistoryReveal = (id: number) => {
+    const next = new Set(revealedHistoryIds.value);
+
+    if (next.has(id)) {
+        next.delete(id);
+    } else {
+        next.add(id);
+    }
+
+    revealedHistoryIds.value = next;
+};
+
+const copyHistoryPassword = (entry: PasswordHistoryEntry) => {
+    void copy('Previous password', entry.password);
+};
+
+const formatHistoryDate = (value: string) =>
+    new Date(value).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+    });
 </script>
 
 <template>
@@ -192,7 +281,9 @@ const maskedPassword = computed(() =>
                 </SheetTitle>
                 <SheetDescription v-if="!isCreate">
                     {{ vaultName }}
-                    <template v-if="item?.folder"> · {{ item.folder }}</template>
+                    <template v-if="item?.folder">
+                        · {{ item.folder }}</template
+                    >
                 </SheetDescription>
                 <SheetDescription v-else>
                     Add a login or secure note to your vault.
@@ -205,7 +296,11 @@ const maskedPassword = computed(() =>
                     <Label class="text-muted-foreground">Website</Label>
                     <div class="flex items-center gap-2">
                         <a
-                            :href="item.url.startsWith('http') ? item.url : `https://${item.url}`"
+                            :href="
+                                item.url.startsWith('http')
+                                    ? item.url
+                                    : `https://${item.url}`
+                            "
                             target="_blank"
                             rel="noopener noreferrer"
                             class="truncate text-sm underline underline-offset-4"
@@ -227,7 +322,16 @@ const maskedPassword = computed(() =>
                 </div>
 
                 <div class="space-y-1">
-                    <Label class="text-muted-foreground">Password</Label>
+                    <div class="flex items-center justify-between">
+                        <Label class="text-muted-foreground">Password</Label>
+                        <button
+                            type="button"
+                            class="flex items-center gap-1 text-sm text-muted-foreground underline underline-offset-4"
+                            @click="openHistory"
+                        >
+                            <History class="size-3.5" /> History
+                        </button>
+                    </div>
                     <div class="flex items-center gap-2">
                         <button
                             type="button"
@@ -235,7 +339,11 @@ const maskedPassword = computed(() =>
                             title="Tap to copy"
                             @click="copyPassword"
                         >
-                            {{ showPassword ? (loadedSecrets?.password ?? '—') : maskedPassword }}
+                            {{
+                                showPassword
+                                    ? (loadedSecrets?.password ?? '—')
+                                    : maskedPassword
+                            }}
                         </button>
                         <Button
                             type="button"
@@ -271,7 +379,9 @@ const maskedPassword = computed(() =>
                     :key="field.id"
                     class="space-y-1"
                 >
-                    <Label class="text-muted-foreground">{{ field.label }}</Label>
+                    <Label class="text-muted-foreground">{{
+                        field.label
+                    }}</Label>
                     <button
                         type="button"
                         class="block w-full truncate rounded-md bg-muted px-3 py-2 text-left font-mono text-sm hover:bg-accent"
@@ -289,7 +399,11 @@ const maskedPassword = computed(() =>
                     >
                         Edit
                     </Button>
-                    <Button variant="destructive" size="icon" @click="deleteItem">
+                    <Button
+                        variant="destructive"
+                        size="icon"
+                        @click="deleteItem"
+                    >
                         <Trash2 class="size-4" />
                         <span class="sr-only">Delete item</span>
                     </Button>
@@ -368,16 +482,35 @@ const maskedPassword = computed(() =>
                             {{ showGenerator ? 'Hide generator' : 'Generate' }}
                         </button>
                     </div>
-                    <Input
-                        id="item-password"
-                        v-model="form.password"
-                        :type="showPassword ? 'text' : 'password'"
-                        autocomplete="off"
-                        class="font-mono"
-                    />
+                    <div class="relative">
+                        <Input
+                            id="item-password"
+                            v-model="form.password"
+                            :type="showPassword ? 'text' : 'password'"
+                            autocomplete="off"
+                            class="pr-10 font-mono"
+                        />
+                        <button
+                            type="button"
+                            class="absolute inset-y-0 right-0 flex items-center rounded-r-md px-3 text-muted-foreground hover:text-foreground"
+                            :aria-label="
+                                showPassword ? 'Hide password' : 'Show password'
+                            "
+                            @click="showPassword = !showPassword"
+                        >
+                            <EyeOff v-if="showPassword" class="size-4" />
+                            <Eye v-else class="size-4" />
+                        </button>
+                    </div>
                     <PasswordGenerator
                         v-if="showGenerator"
-                        @use="(password) => { form.password = password; showGenerator = false; showPassword = true; }"
+                        @use="
+                            (password) => {
+                                form.password = password;
+                                showGenerator = false;
+                                showPassword = true;
+                            }
+                        "
                     />
                 </div>
 
@@ -450,7 +583,9 @@ const maskedPassword = computed(() =>
                                 :model-value="field.value ?? ''"
                                 placeholder="Value"
                                 class="font-mono"
-                                @update:model-value="(v) => (field.value = String(v))"
+                                @update:model-value="
+                                    (v) => (field.value = String(v))
+                                "
                             />
                             <label
                                 class="flex items-center gap-1.5 text-sm text-muted-foreground"
@@ -496,7 +631,11 @@ const maskedPassword = computed(() =>
                     <Button
                         type="button"
                         variant="outline"
-                        @click="isCreate ? emit('update:open', false) : (editing = false)"
+                        @click="
+                            isCreate
+                                ? emit('update:open', false)
+                                : (editing = false)
+                        "
                     >
                         Cancel
                     </Button>
@@ -504,4 +643,56 @@ const maskedPassword = computed(() =>
             </form>
         </SheetContent>
     </Sheet>
+
+    <Dialog v-model:open="showHistory">
+        <DialogContent class="max-h-[80dvh] overflow-y-auto">
+            <DialogHeader>
+                <DialogTitle>Password history</DialogTitle>
+                <DialogDescription>
+                    Previous passwords for {{ item?.name }}. Tap a password to
+                    reveal or copy it.
+                </DialogDescription>
+            </DialogHeader>
+
+            <p v-if="historyLoading" class="text-sm text-muted-foreground">
+                Loading…
+            </p>
+            <ul v-else-if="history.length" class="space-y-2">
+                <li v-for="entry in history" :key="entry.id" class="space-y-1">
+                    <Label class="text-muted-foreground">{{
+                        formatHistoryDate(entry.created_at)
+                    }}</Label>
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            class="min-w-0 flex-1 truncate rounded-md bg-muted px-3 py-2 text-left font-mono text-sm hover:bg-accent"
+                            title="Tap to copy"
+                            @click="copyHistoryPassword(entry)"
+                        >
+                            {{
+                                revealedHistoryIds.has(entry.id)
+                                    ? entry.password
+                                    : '••••••••••••'
+                            }}
+                        </button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            @click="toggleHistoryReveal(entry.id)"
+                        >
+                            <Eye
+                                v-if="!revealedHistoryIds.has(entry.id)"
+                                class="size-4"
+                            />
+                            <EyeOff v-else class="size-4" />
+                        </Button>
+                    </div>
+                </li>
+            </ul>
+            <p v-else class="text-sm text-muted-foreground">
+                No previous passwords recorded.
+            </p>
+        </DialogContent>
+    </Dialog>
 </template>

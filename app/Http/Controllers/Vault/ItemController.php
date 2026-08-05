@@ -7,6 +7,7 @@ use App\Http\Requests\Vault\StoreItemRequest;
 use App\Http\Requests\Vault\UpdateItemRequest;
 use App\Models\Folder;
 use App\Models\Item;
+use App\Models\ItemPasswordHistory;
 use App\Models\Vault;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -131,6 +132,22 @@ class ItemController extends Controller
                 'type' => $field->type,
                 'value' => $field->value,
                 'is_secret' => $field->is_secret,
+            ]),
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
+     * Previous passwords, fetched on demand so they never ride in the page payload.
+     */
+    public function passwordHistory(Item $item): JsonResponse
+    {
+        Gate::authorize('view', $item);
+
+        return response()->json([
+            'history' => $item->passwordHistories->map(fn (ItemPasswordHistory $entry) => [
+                'id' => $entry->id,
+                'password' => $entry->password,
+                'created_at' => $entry->created_at,
             ]),
         ])->header('Cache-Control', 'no-store, private');
     }
