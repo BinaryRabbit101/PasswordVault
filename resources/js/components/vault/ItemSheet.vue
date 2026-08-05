@@ -22,6 +22,7 @@ import {
 import PasswordGenerator from '@/components/vault/PasswordGenerator.vue';
 import TotpCode from '@/components/vault/TotpCode.vue';
 import { useClipboard } from '@/composables/useClipboard';
+import { externalHref } from '@/lib/utils';
 import {
     destroy,
     passwordHistory,
@@ -128,18 +129,22 @@ const fetchPasswordHistory = async (
     return response.json();
 };
 
+const resetSensitiveState = () => {
+    editing.value = false;
+    showPassword.value = false;
+    showGenerator.value = false;
+    loadedSecrets.value = null;
+    showHistory.value = false;
+    history.value = [];
+    revealedHistoryIds.value = new Set();
+    form.reset();
+    form.clearErrors();
+};
+
 watch(
     () => props.open,
     async (open) => {
-        editing.value = false;
-        showPassword.value = false;
-        showGenerator.value = false;
-        loadedSecrets.value = null;
-        showHistory.value = false;
-        history.value = [];
-        revealedHistoryIds.value = new Set();
-        form.reset();
-        form.clearErrors();
+        resetSensitiveState();
 
         if (!open) {
             return;
@@ -157,6 +162,45 @@ watch(
         }
     },
 );
+
+/**
+ * Auto-lock's `onHide`: drop revealed secrets from memory without closing
+ * the sheet, so returning to the tab doesn't lose your place in the list.
+ *
+ * A create/edit form in progress has no "masked" view to fall back to, so
+ * that case still closes the sheet outright — same as before this existed.
+ */
+const lock = () => {
+    if (!props.open) {
+        return;
+    }
+
+    if (editing.value) {
+        emit('update:open', false);
+
+        return;
+    }
+
+    resetSensitiveState();
+};
+
+/**
+ * Auto-lock's `onShow`: reload whatever `lock()` dropped, same as the
+ * fetch that runs when the sheet first opens on this item.
+ */
+const unlock = async () => {
+    if (!props.open || !props.item || editing.value) {
+        return;
+    }
+
+    try {
+        loadedSecrets.value = await fetchSecrets(props.item.id);
+    } catch {
+        loadedSecrets.value = null;
+    }
+};
+
+defineExpose({ lock, unlock });
 
 const startEditing = () => {
     if (!props.item || !loadedSecrets.value) {
@@ -296,11 +340,7 @@ const formatHistoryDate = (value: string) =>
                     <Label class="text-muted-foreground">Website</Label>
                     <div class="flex items-center gap-2">
                         <a
-                            :href="
-                                item.url.startsWith('http')
-                                    ? item.url
-                                    : `https://${item.url}`
-                            "
+                            :href="externalHref(item.url)"
                             target="_blank"
                             rel="noopener noreferrer"
                             class="truncate text-sm underline underline-offset-4"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Copy, KeyRound, Star, WandSparkles } from '@lucide/vue';
 import { computed } from 'vue';
+import { externalHref } from '@/lib/utils';
 import type { VaultItem } from '@/types/vault';
 
 const props = defineProps<{
@@ -28,9 +29,11 @@ const AVATAR_CLASSES = [
 
 const avatarClass = computed(() => {
     let hash = 0;
+
     for (const char of props.item.name) {
         hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
     }
+
     return AVATAR_CLASSES[hash % AVATAR_CLASSES.length];
 });
 
@@ -71,9 +74,9 @@ const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
 
         <a
             v-if="item.url"
-            :href="item.url"
+            :href="externalHref(item.url)"
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
             class="rounded-md p-2 text-muted-foreground hover:bg-background hover:text-foreground"
             title="Open site & autofill"
             @click="emit('autofill')"

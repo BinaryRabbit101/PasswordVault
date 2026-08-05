@@ -3,10 +3,10 @@ import { Head } from '@inertiajs/vue3';
 import { Plus, Search, Star } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import ItemRow from '@/components/vault/ItemRow.vue';
 import ItemSheet from '@/components/vault/ItemSheet.vue';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { useAutoLock } from '@/composables/useAutoLock';
 import { useClipboard } from '@/composables/useClipboard';
 import { csrfHeaders } from '@/lib/csrf';
@@ -32,11 +32,16 @@ const search = ref('');
 const activeVaultId = ref<number | null>(null);
 const sheetOpen = ref(false);
 const activeItem = ref<VaultItem | null>(null);
+const itemSheet = ref<InstanceType<typeof ItemSheet> | null>(null);
 
-// Backgrounding the app closes the sheet, dropping any revealed secrets.
-useAutoLock(() => {
-    sheetOpen.value = false;
-});
+// Backgrounding the app re-masks whatever the sheet has open, dropping
+// revealed secrets from memory without closing it — so coming back doesn't
+// lose your place in the list. Secrets reload automatically on return.
+useAutoLock(
+    () => itemSheet.value?.lock(),
+    5,
+    () => itemSheet.value?.unlock(),
+);
 
 const filteredItems = computed(() => {
     const query = search.value.trim().toLowerCase();
@@ -49,7 +54,9 @@ const filteredItems = computed(() => {
             return false;
         }
 
-        if (query === '') return true;
+        if (query === '') {
+            return true;
+        }
 
         return [item.name, item.url, item.username, item.folder].some((value) =>
             value?.toLowerCase().includes(query),
@@ -66,14 +73,24 @@ const sections = computed(() => {
 
     for (const item of filteredItems.value) {
         const key = item.folder ?? '';
-        if (!groups.has(key)) groups.set(key, []);
+
+        if (!groups.has(key)) {
+            groups.set(key, []);
+        }
+
         groups.get(key)!.push(item);
     }
 
     return [...groups.entries()]
         .sort(([a], [b]) => {
-            if (a === '') return 1;
-            if (b === '') return -1;
+            if (a === '') {
+                return 1;
+            }
+
+            if (b === '') {
+                return -1;
+            }
+
             return a.localeCompare(b);
         })
         .map(([title, items]) => ({ title: title || 'No folder', items }));
@@ -235,6 +252,7 @@ const autofill = (item: VaultItem) => {
         </Button>
 
         <ItemSheet
+            ref="itemSheet"
             v-model:open="sheetOpen"
             :item="activeItem"
             :vaults="vaults"
