@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -79,5 +80,35 @@ class User extends Authenticatable implements PasskeyUser
             ->where('type', Vault::TYPE_PERSONAL)
             ->where('created_by', $this->id)
             ->first();
+    }
+
+    // ---- Phone keys (Settings → Phone; also `php artisan vault:token`) ----
+    // Two independent keys for /api/lookup: the device key the Shortcut sends
+    // as a header, and the fill key the in-page filler embeds (Origin-scoped,
+    // so it can be rotated on its own if a page leaks it).
+
+    /** @var list<string> */
+    public const PHONE_TOKENS = ['device_token', 'fill_token'];
+
+    /** Mint or roll one of the phone keys; the previous value stops working at once. */
+    public function regeneratePhoneToken(string $column): string
+    {
+        $this->assertPhoneTokenColumn($column);
+        $this->forceFill([$column => Str::random(48)])->save();
+
+        return $this->{$column};
+    }
+
+    public function revokePhoneToken(string $column): void
+    {
+        $this->assertPhoneTokenColumn($column);
+        $this->forceFill([$column => null])->save();
+    }
+
+    private function assertPhoneTokenColumn(string $column): void
+    {
+        if (! in_array($column, self::PHONE_TOKENS, true)) {
+            throw new \InvalidArgumentException("Unknown phone token column: {$column}");
+        }
     }
 }

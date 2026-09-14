@@ -36,7 +36,7 @@ class VaultToken extends Command
             return self::SUCCESS;
         }
 
-        $user->forceFill([$column => Str::random(48)])->save();
+        $user->regeneratePhoneToken($column);
 
         $this->info("{$label} for {$user->name}:");
         $this->line($user->{$column});

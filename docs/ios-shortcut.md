@@ -17,7 +17,10 @@ two taps put the right password on your clipboard.
 
 ## One-time setup
 
-### 1. Mint a device token (on the server)
+### 1. Mint a device token
+
+**Settings → Phone** in the app: *Generate device key*, then Copy. The same page rolls
+(*Generate a new key*) and revokes it. From the server, the equivalent is:
 
 ```bash
 php artisan vault:token you@example.com
@@ -67,6 +70,8 @@ request actually came from (the browser sets `Origin`; page JS cannot forge
 it), so even if the token leaks it can't be used to dump other logins.
 
 ### 1. Mint a fill token
+
+**Settings → Phone → Fill key → Generate** (roll and revoke there too), or on the server:
 
 ```bash
 php artisan vault:token you@example.com --fill
