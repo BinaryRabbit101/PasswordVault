@@ -161,6 +161,7 @@ const autofill = (item: VaultItem) => {
                     v-model="search"
                     type="search"
                     placeholder="Search vault…"
+                    data-test="vault-search"
                     class="pl-9"
                     autocapitalize="none"
                     autocomplete="off"
@@ -233,6 +234,7 @@ const autofill = (item: VaultItem) => {
         <p
             v-if="filteredItems.length === 0"
             class="py-16 text-center text-muted-foreground"
+            data-test="vault-empty"
         >
             {{
                 items.length === 0
@@ -245,6 +247,7 @@ const autofill = (item: VaultItem) => {
             class="fixed right-5 bottom-5 z-20 size-14 rounded-full shadow-lg"
             size="icon"
             title="Add item"
+            data-test="add-item"
             @click="openCreate"
         >
             <Plus class="size-6" />

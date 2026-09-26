@@ -28,6 +28,7 @@ onMounted(regenerate);
         <div class="flex items-center gap-2">
             <output
                 class="min-w-0 flex-1 truncate rounded-md bg-muted px-3 py-2 font-mono text-sm"
+                data-test="generator-output"
             >
                 {{ password }}
             </output>
@@ -61,28 +62,48 @@ onMounted(regenerate);
             <label class="flex items-center gap-1.5">
                 <Checkbox
                     :model-value="options.uppercase"
-                    @update:model-value="(v: boolean | 'indeterminate') => { options.uppercase = v === true; regenerate(); }"
+                    @update:model-value="
+                        (v: boolean | 'indeterminate') => {
+                            options.uppercase = v === true;
+                            regenerate();
+                        }
+                    "
                 />
                 A-Z
             </label>
             <label class="flex items-center gap-1.5">
                 <Checkbox
                     :model-value="options.lowercase"
-                    @update:model-value="(v: boolean | 'indeterminate') => { options.lowercase = v === true; regenerate(); }"
+                    @update:model-value="
+                        (v: boolean | 'indeterminate') => {
+                            options.lowercase = v === true;
+                            regenerate();
+                        }
+                    "
                 />
                 a-z
             </label>
             <label class="flex items-center gap-1.5">
                 <Checkbox
                     :model-value="options.digits"
-                    @update:model-value="(v: boolean | 'indeterminate') => { options.digits = v === true; regenerate(); }"
+                    @update:model-value="
+                        (v: boolean | 'indeterminate') => {
+                            options.digits = v === true;
+                            regenerate();
+                        }
+                    "
                 />
                 0-9
             </label>
             <label class="flex items-center gap-1.5">
                 <Checkbox
                     :model-value="options.symbols"
-                    @update:model-value="(v: boolean | 'indeterminate') => { options.symbols = v === true; regenerate(); }"
+                    @update:model-value="
+                        (v: boolean | 'indeterminate') => {
+                            options.symbols = v === true;
+                            regenerate();
+                        }
+                    "
                 />
                 !@#
             </label>
@@ -93,6 +114,7 @@ onMounted(regenerate);
             variant="secondary"
             class="w-full"
             :disabled="!password"
+            data-test="generator-use"
             @click="emit('use', password)"
         >
             Use this password

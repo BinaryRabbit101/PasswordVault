@@ -1,6 +1,11 @@
 <?php
 
+// Browser tests: DuskTestCase brings DatabaseMigrations (see tests/DuskTestCase.php).
+pest()->extend(DuskTestCase::class)
+    ->in('Browser');
+
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\DuskTestCase;
 use Tests\TestCase;
 
 /*

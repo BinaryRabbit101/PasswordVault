@@ -31,3 +31,6 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+.env.dusk.local
+.env.pretest-backup
+/database/testing/dusk.sqlite

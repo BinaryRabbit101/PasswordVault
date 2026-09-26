@@ -43,10 +43,13 @@ const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
 <template>
     <div
         class="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-accent"
+        data-test="item-row"
+        :data-item-id="item.id"
     >
         <button
             type="button"
             class="flex min-w-0 flex-1 items-center gap-3 text-left"
+            data-test="item-open"
             @click="emit('open')"
         >
             <span
@@ -57,7 +60,9 @@ const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
             </span>
             <span class="min-w-0">
                 <span class="flex items-center gap-1.5">
-                    <span class="truncate font-medium">{{ item.name }}</span>
+                    <span class="truncate font-medium" data-test="item-name">{{
+                        item.name
+                    }}</span>
                     <Star
                         v-if="item.favorite"
                         class="size-3.5 shrink-0 fill-amber-400 text-amber-400"
@@ -66,6 +71,7 @@ const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
                 <span
                     v-if="item.username"
                     class="block truncate text-sm text-muted-foreground"
+                    data-test="item-username"
                 >
                     {{ item.username }}
                 </span>
@@ -79,6 +85,7 @@ const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
             rel="noopener noreferrer"
             class="rounded-md p-2 text-muted-foreground hover:bg-background hover:text-foreground"
             title="Open site & autofill"
+            data-test="item-autofill"
             @click="emit('autofill')"
         >
             <WandSparkles class="size-4" />
@@ -89,6 +96,7 @@ const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
             type="button"
             class="rounded-md p-2 text-muted-foreground hover:bg-background hover:text-foreground"
             title="Copy username"
+            data-test="item-copy-username"
             @click="emit('copyUsername')"
         >
             <Copy class="size-4" />
@@ -99,6 +107,7 @@ const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
             type="button"
             class="rounded-md p-2 text-muted-foreground hover:bg-background hover:text-foreground"
             title="Copy password"
+            data-test="item-copy-password"
             @click="emit('copyPassword')"
         >
             <KeyRound class="size-4" />

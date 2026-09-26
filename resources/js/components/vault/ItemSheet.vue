@@ -426,17 +426,22 @@ const MASK = '••••••••••••';
             <!-- ============ View mode ============ -->
             <div v-if="!editing && item" class="space-y-4 px-4 pb-6">
                 <div
-                    v-for="field in visibleFields"
+                    v-for="(field, index) in visibleFields"
                     :key="field.id"
                     class="space-y-1"
+                    :data-test="`view-field-${index}`"
+                    :data-field-type="field.type"
                 >
                     <div class="flex items-center justify-between">
-                        <Label class="text-muted-foreground">{{
-                            field.label
-                        }}</Label>
+                        <Label
+                            class="text-muted-foreground"
+                            data-test="view-field-label"
+                            >{{ field.label }}</Label
+                        >
                         <button
                             type="button"
                             class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                            data-test="view-field-history"
                             :title="`Previous values of ${field.label}`"
                             @click="openHistory(field)"
                         >
@@ -456,6 +461,7 @@ const MASK = '••••••••••••';
                         type="button"
                         class="block w-full rounded-md bg-muted px-3 py-2 text-left text-sm whitespace-pre-wrap hover:bg-accent"
                         title="Tap to copy"
+                        data-test="view-field-value"
                         @click="copy(field.label, field.value!)"
                     >
                         {{ field.value }}
@@ -467,6 +473,7 @@ const MASK = '••••••••••••';
                             target="_blank"
                             rel="noopener noreferrer"
                             class="block truncate text-sm underline underline-offset-4"
+                            data-test="view-field-value"
                         >
                             {{ field.value }}
                         </a>
@@ -477,6 +484,7 @@ const MASK = '••••••••••••';
                             type="button"
                             class="min-w-0 flex-1 truncate rounded-md bg-muted px-3 py-2 text-left font-mono text-sm hover:bg-accent"
                             title="Tap to copy"
+                            data-test="view-field-value"
                             @click="copy(field.label, field.value!)"
                         >
                             {{
@@ -494,6 +502,7 @@ const MASK = '••••••••••••';
                             :aria-label="
                                 revealed.has(field.id!) ? 'Hide' : 'Show'
                             "
+                            data-test="view-field-reveal"
                             @click="revealed = toggle(revealed, field.id!)"
                         >
                             <EyeOff
@@ -508,6 +517,7 @@ const MASK = '••••••••••••';
                 <p
                     v-if="loadedSecrets && visibleFields.length === 0"
                     class="text-sm text-muted-foreground"
+                    data-test="no-fields"
                 >
                     No fields yet — tap Edit to add some.
                 </p>
@@ -516,6 +526,7 @@ const MASK = '••••••••••••';
                     <Button
                         class="flex-1"
                         :disabled="!loadedSecrets"
+                        data-test="item-edit"
                         @click="startEditing"
                     >
                         Edit
@@ -523,6 +534,7 @@ const MASK = '••••••••••••';
                     <Button
                         variant="destructive"
                         size="icon"
+                        data-test="item-delete"
                         @click="deleteItem"
                     >
                         <Trash2 class="size-4" />
@@ -542,6 +554,7 @@ const MASK = '••••••••••••';
                         v-for="option in TEMPLATES"
                         :key="option.name"
                         type="button"
+                        :data-test="`template-${option.name.toLowerCase().replace(' ', '-')}`"
                         class="rounded-full border px-3 py-1 text-sm transition-colors"
                         :class="
                             template === option.name
@@ -556,7 +569,12 @@ const MASK = '••••••••••••';
 
                 <div class="grid gap-2">
                     <Label for="item-name">Name</Label>
-                    <Input id="item-name" v-model="form.name" required />
+                    <Input
+                        id="item-name"
+                        v-model="form.name"
+                        data-test="item-name"
+                        required
+                    />
                     <p v-if="form.errors.name" class="text-sm text-destructive">
                         {{ form.errors.name }}
                     </p>
@@ -596,17 +614,20 @@ const MASK = '••••••••••••';
                         v-for="(field, index) in form.fields"
                         :key="field.key"
                         class="space-y-2 rounded-lg border border-input p-2"
+                        :data-test="`field-${index}`"
                     >
                         <div class="grid grid-cols-[1fr_auto] gap-2">
                             <Input
                                 v-model="field.label"
                                 placeholder="Label"
                                 aria-label="Field label"
+                                data-test="field-label"
                                 required
                             />
                             <select
                                 v-model="field.type"
                                 aria-label="Field type"
+                                data-test="field-type"
                                 class="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
                                 @change="onTypeChange(field)"
                             >
@@ -625,6 +646,7 @@ const MASK = '••••••••••••';
                             v-model="field.value"
                             rows="3"
                             :aria-label="field.label || 'Value'"
+                            data-test="field-value"
                             class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
                         ></textarea>
 
@@ -640,6 +662,7 @@ const MASK = '••••••••••••';
                                         : 'password'
                                 "
                                 :aria-label="field.label || 'Value'"
+                                data-test="field-value"
                                 autocomplete="off"
                                 class="pr-10 font-mono"
                                 @update:model-value="
@@ -652,6 +675,7 @@ const MASK = '••••••••••••';
                                 :aria-label="
                                     revealed.has(field.key) ? 'Hide' : 'Show'
                                 "
+                                data-test="field-reveal"
                                 @click="revealed = toggle(revealed, field.key)"
                             >
                                 <EyeOff
@@ -677,6 +701,7 @@ const MASK = '••••••••••••';
                                       : ''
                             "
                             :aria-label="field.label || 'Value'"
+                            data-test="field-value"
                             autocapitalize="none"
                             autocomplete="off"
                             :class="field.type === 'text' ? '' : 'font-mono'"
@@ -688,6 +713,7 @@ const MASK = '••••••••••••';
                         <p
                             v-if="fieldErrors[`fields.${index}.value`]"
                             class="text-sm text-destructive"
+                            data-test="field-error"
                         >
                             {{ fieldErrors[`fields.${index}.value`] }}
                         </p>
@@ -711,6 +737,7 @@ const MASK = '••••••••••••';
                                 v-if="AUTOFILL_TYPES.includes(field.type)"
                                 :value="field.autofill ?? ''"
                                 aria-label="Autofill as"
+                                data-test="field-autofill"
                                 class="h-8 rounded-md border border-input bg-transparent px-2 text-xs text-muted-foreground"
                                 @change="
                                     (event) =>
@@ -734,6 +761,7 @@ const MASK = '••••••••••••';
                                 v-if="field.type === 'password'"
                                 type="button"
                                 class="px-2 text-xs text-muted-foreground underline underline-offset-4"
+                                data-test="field-generate"
                                 @click="
                                     generatorFor =
                                         generatorFor === field.key
@@ -756,6 +784,7 @@ const MASK = '••••••••••••';
                                 size="icon"
                                 class="size-8"
                                 :disabled="index === 0"
+                                data-test="field-up"
                                 @click="moveField(index, -1)"
                             >
                                 <ChevronUp class="size-4" />
@@ -767,6 +796,7 @@ const MASK = '••••••••••••';
                                 size="icon"
                                 class="size-8"
                                 :disabled="index === form.fields.length - 1"
+                                data-test="field-down"
                                 @click="moveField(index, 1)"
                             >
                                 <ChevronDown class="size-4" />
@@ -777,6 +807,7 @@ const MASK = '••••••••••••';
                                 variant="ghost"
                                 size="icon"
                                 class="size-8"
+                                data-test="field-remove"
                                 @click="removeField(index)"
                             >
                                 <X class="size-4" />
@@ -790,6 +821,7 @@ const MASK = '••••••••••••';
                         variant="outline"
                         size="sm"
                         class="w-full"
+                        data-test="add-field"
                         @click="addField"
                     >
                         <Plus class="size-4" /> Add field
@@ -800,6 +832,7 @@ const MASK = '••••••••••••';
                     <input
                         v-model="form.favorite"
                         type="checkbox"
+                        data-test="item-favorite"
                         class="accent-primary"
                     />
                     <Star class="size-4 text-amber-400" />
@@ -811,6 +844,7 @@ const MASK = '••••••••••••';
                         type="submit"
                         class="flex-1"
                         :disabled="form.processing"
+                        data-test="item-save"
                     >
                         {{ isCreate ? 'Add item' : 'Save changes' }}
                     </Button>
@@ -843,7 +877,12 @@ const MASK = '••••••••••••';
                 Loading…
             </p>
             <ul v-else-if="history.length" class="space-y-2">
-                <li v-for="entry in history" :key="entry.id" class="space-y-1">
+                <li
+                    v-for="entry in history"
+                    :key="entry.id"
+                    class="space-y-1"
+                    data-test="history-entry"
+                >
                     <Label class="text-muted-foreground">{{
                         formatHistoryDate(entry.created_at)
                     }}</Label>
@@ -852,6 +891,7 @@ const MASK = '••••••••••••';
                             type="button"
                             class="min-w-0 flex-1 truncate rounded-md bg-muted px-3 py-2 text-left font-mono text-sm hover:bg-accent"
                             title="Tap to copy"
+                            data-test="history-value"
                             @click="
                                 copy(
                                     `Previous ${historyField?.label ?? 'value'}`,
@@ -869,6 +909,7 @@ const MASK = '••••••••••••';
                         <Button
                             v-if="historyField?.type === 'password'"
                             type="button"
+                            data-test="history-reveal"
                             variant="ghost"
                             size="icon"
                             @click="
@@ -887,7 +928,11 @@ const MASK = '••••••••••••';
                     </div>
                 </li>
             </ul>
-            <p v-else class="text-sm text-muted-foreground">
+            <p
+                v-else
+                class="text-sm text-muted-foreground"
+                data-test="history-empty"
+            >
                 No previous values recorded.
             </p>
         </DialogContent>
