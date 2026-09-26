@@ -8,31 +8,32 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * A previous password an item held before it was changed.
+ * A value a field held before it was changed (at most ItemField::HISTORY_LIMIT
+ * are kept per field).
  *
  * @property int $id
- * @property int $item_id
- * @property string $password
+ * @property int $item_field_id
+ * @property string $value
  * @property CarbonImmutable|null $created_at
  */
-#[Fillable(['item_id', 'password'])]
-class ItemPasswordHistory extends Model
+#[Fillable(['item_field_id', 'value'])]
+class ItemFieldHistory extends Model
 {
     public $timestamps = false;
 
     protected function casts(): array
     {
         return [
-            'password' => 'encrypted',
+            'value' => 'encrypted',
             'created_at' => 'datetime',
         ];
     }
 
     /**
-     * @return BelongsTo<Item, $this>
+     * @return BelongsTo<ItemField, $this>
      */
-    public function item(): BelongsTo
+    public function field(): BelongsTo
     {
-        return $this->belongsTo(Item::class);
+        return $this->belongsTo(ItemField::class, 'item_field_id');
     }
 }

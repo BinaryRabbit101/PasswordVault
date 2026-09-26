@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Vault;
 
 use App\Http\Controllers\Controller;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\Vault;
 use Illuminate\Http\Request;
 use League\Csv\Writer;
@@ -13,7 +14,10 @@ class ExportController extends Controller
 {
     /**
      * Stream a LastPass-format CSV of every item in the user's vaults.
-     * Custom fields are appended to the notes column so nothing is lost.
+     *
+     * The fields autofill uses fill LastPass's url/username/password/totp
+     * columns; notes and every other field go in the extra column as
+     * "Label: value" lines so nothing is lost.
      */
     public function download(Request $request): Response
     {
@@ -27,18 +31,19 @@ class ExportController extends Controller
             ->with(['folder:id,name', 'fields'])
             ->orderBy('name')
             ->each(function (Item $item) use ($writer): void {
-                $notes = (string) ($item->notes ?? '');
-
-                foreach ($item->fields as $field) {
-                    $notes .= ($notes === '' ? '' : "\n")."{$field->label}: {$field->value}";
-                }
+                $columns = [
+                    'url' => $item->url,
+                    'username' => $item->username,
+                    'password' => $item->loginPassword(),
+                    'totp' => $item->totpSecret(),
+                ];
 
                 $writer->insertOne([
-                    $item->url ?? 'http://sn',
-                    $item->username ?? '',
-                    $item->password ?? '',
-                    $item->totp_secret ?? '',
-                    $notes,
+                    $columns['url'] ?? 'http://sn',
+                    $columns['username'] ?? '',
+                    $columns['password'] ?? '',
+                    $columns['totp'] ?? '',
+                    $this->extra($item, $columns),
                     $item->name,
                     $item->folder->name ?? '',
                     $item->favorite ? '1' : '0',
@@ -50,5 +55,36 @@ class ExportController extends Controller
             'Content-Disposition' => 'attachment; filename="vault-export.csv"',
             'Cache-Control' => 'no-store, private',
         ]);
+    }
+
+    /**
+     * Every field not already written to a LastPass column, in order.
+     *
+     * @param  array<string, string|null>  $columns
+     */
+    private function extra(Item $item, array $columns): string
+    {
+        $lines = [];
+
+        foreach ($item->fields as $field) {
+            /** @var ItemField $field */
+            if ($field->value === null) {
+                continue;
+            }
+
+            $column = array_search($field->value, $columns, true);
+
+            if ($column !== false) {
+                unset($columns[$column]); // each column takes one field
+
+                continue;
+            }
+
+            $lines[] = $field->type === 'note' && $field->label === 'Notes'
+                ? $field->value
+                : "{$field->label}: {$field->value}";
+        }
+
+        return implode("\n", $lines);
     }
 }

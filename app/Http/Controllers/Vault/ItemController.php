@@ -7,12 +7,15 @@ use App\Http\Requests\Vault\StoreItemRequest;
 use App\Http\Requests\Vault\UpdateItemRequest;
 use App\Models\Folder;
 use App\Models\Item;
-use App\Models\ItemPasswordHistory;
+use App\Models\ItemField;
+use App\Models\ItemFieldHistory;
 use App\Models\Vault;
+use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -28,7 +31,8 @@ class ItemController extends Controller
 
         $items = Item::query()
             ->whereIn('vault_id', $vaults->modelKeys())
-            ->with('folder:id,name')
+            // Types only — no field value is decrypted for the list.
+            ->with(['folder:id,name', 'fields:id,item_id,type,autofill'])
             ->orderBy('name')
             ->get()
             ->map(fn (Item $item) => [
@@ -39,8 +43,10 @@ class ItemController extends Controller
                 'username' => $item->username,
                 'folder' => $item->folder?->name,
                 'favorite' => $item->favorite,
-                'has_totp' => $item->totp_secret !== null,
-                'has_notes' => $item->notes !== null,
+                'has_password' => $item->fields->contains(
+                    fn (ItemField $field) => $field->autofill === ItemField::AUTOFILL_PASSWORD
+                        || ($field->autofill === null && $field->type === 'password'),
+                ),
             ]);
 
         return Inertia::render('vault/Index', [
@@ -58,19 +64,20 @@ class ItemController extends Controller
     {
         $data = $request->validated();
         $vault = Vault::findOrFail((int) $data['vault_id']);
+        $fields = $data['fields'] ?? [];
 
-        try {
-            $item = $vault->items()->create([
-                ...collect($data)->except(['fields', 'folder'])->all(),
-                'folder_id' => $this->resolveFolder($vault, $data['folder'] ?? null),
-            ]);
-        } catch (UniqueConstraintViolationException) {
-            throw ValidationException::withMessages([
-                'name' => __('An identical item already exists in this vault.'),
-            ]);
-        }
+        $item = new Item([
+            'name' => $data['name'],
+            'favorite' => $data['favorite'] ?? false,
+            'folder_id' => $this->resolveFolder($vault, $data['folder'] ?? null),
+        ]);
+        $item->vault_id = $vault->id;
+        $item->applyDerived($fields);
 
-        $this->syncFields($item, $data['fields'] ?? []);
+        $this->rejectingDuplicates(function () use ($item, $fields): void {
+            $item->save();
+            $item->syncFields($fields);
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Item added.')]);
 
@@ -84,20 +91,22 @@ class ItemController extends Controller
         $data = $request->validated();
         $vault = isset($data['vault_id']) ? Vault::findOrFail((int) $data['vault_id']) : $item->vault;
 
-        try {
-            $item->update([
-                ...collect($data)->except(['fields', 'folder'])->all(),
-                'folder_id' => $this->resolveFolder($vault, $data['folder'] ?? null),
-            ]);
-        } catch (UniqueConstraintViolationException) {
-            throw ValidationException::withMessages([
-                'name' => __('An identical item already exists in this vault.'),
-            ]);
-        }
+        $item->fill([
+            ...collect($data)->only(['vault_id', 'name', 'favorite'])->all(),
+            'folder_id' => $this->resolveFolder($vault, $data['folder'] ?? null),
+        ]);
 
-        if (array_key_exists('fields', $data)) {
-            $this->syncFields($item, $data['fields']);
-        }
+        $this->rejectingDuplicates(function () use ($item, $data): void {
+            $fieldsChanged = array_key_exists('fields', $data) && $item->syncFields($data['fields']);
+
+            // A fields-only edit still counts as an update, so shared-vault
+            // members hear about a changed password.
+            if ($fieldsChanged) {
+                $item->updated_at = now();
+            }
+
+            $item->save();
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Item updated.')]);
 
@@ -117,39 +126,58 @@ class ItemController extends Controller
 
     /**
      * Secrets are fetched on demand so they never ride in the page payload.
+     * `password` is whichever field autofill would use.
      */
     public function secrets(Item $item): JsonResponse
     {
         Gate::authorize('view', $item);
 
         return response()->json([
-            'password' => $item->password,
-            'totp_secret' => $item->totp_secret,
-            'notes' => $item->notes,
-            'fields' => $item->fields->map(fn ($field) => [
+            'password' => $item->loginPassword(),
+            'fields' => $item->fields->map(fn (ItemField $field) => [
                 'id' => $field->id,
                 'label' => $field->label,
                 'type' => $field->type,
+                'autofill' => $field->autofill,
                 'value' => $field->value,
-                'is_secret' => $field->is_secret,
             ]),
         ])->header('Cache-Control', 'no-store, private');
     }
 
     /**
-     * Previous passwords, fetched on demand so they never ride in the page payload.
+     * A field's previous values, fetched on demand so they never ride in the
+     * page payload.
      */
-    public function passwordHistory(Item $item): JsonResponse
+    public function fieldHistory(Item $item, ItemField $field): JsonResponse
     {
         Gate::authorize('view', $item);
 
+        abort_unless($field->item_id === $item->id, 404);
+
         return response()->json([
-            'history' => $item->passwordHistories->map(fn (ItemPasswordHistory $entry) => [
+            'history' => $field->histories->map(fn (ItemFieldHistory $entry) => [
                 'id' => $entry->id,
-                'password' => $entry->password,
+                'value' => $entry->value,
                 'created_at' => $entry->created_at,
             ]),
         ])->header('Cache-Control', 'no-store, private');
+    }
+
+    /**
+     * Run a save in a transaction, turning the dedup constraint into a form
+     * error (and rolling back any field changes with it).
+     *
+     * @param  Closure(): void  $save
+     */
+    protected function rejectingDuplicates(Closure $save): void
+    {
+        try {
+            DB::transaction($save);
+        } catch (UniqueConstraintViolationException) {
+            throw ValidationException::withMessages([
+                'name' => __('An identical item already exists in this vault.'),
+            ]);
+        }
     }
 
     protected function resolveFolder(Vault $vault, ?string $name): ?int
@@ -162,23 +190,5 @@ class ItemController extends Controller
             'vault_id' => $vault->id,
             'name' => trim($name),
         ])->id;
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $fields
-     */
-    protected function syncFields(Item $item, array $fields): void
-    {
-        $item->fields()->delete();
-
-        foreach (array_values($fields) as $index => $field) {
-            $item->fields()->create([
-                'label' => $field['label'],
-                'type' => $field['type'],
-                'value' => $field['value'] ?? null,
-                'is_secret' => $field['is_secret'] ?? true,
-                'sort_order' => $index,
-            ]);
-        }
     }
 }

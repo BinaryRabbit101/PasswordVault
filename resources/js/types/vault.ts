@@ -12,27 +12,30 @@ export interface VaultItem {
     username: string | null;
     folder: string | null;
     favorite: boolean;
-    has_totp: boolean;
-    has_notes: boolean;
+    has_password: boolean;
 }
 
-export interface ItemCustomField {
+export type FieldType = 'text' | 'password' | 'email' | 'url' | 'totp' | 'note';
+
+/** null = auto: first text/email is the username, first password the password. */
+export type FieldAutofill = 'username' | 'password' | 'none' | null;
+
+export interface ItemField {
     id?: number;
     label: string;
-    type: 'text' | 'password' | 'url' | 'note' | 'totp' | 'email';
+    type: FieldType;
+    autofill: FieldAutofill;
     value: string | null;
-    is_secret: boolean;
 }
 
 export interface ItemSecrets {
+    /** Whichever field autofill would use as the password. */
     password: string | null;
-    totp_secret: string | null;
-    notes: string | null;
-    fields: ItemCustomField[];
+    fields: ItemField[];
 }
 
-export interface PasswordHistoryEntry {
+export interface FieldHistoryEntry {
     id: number;
-    password: string;
+    value: string;
     created_at: string;
 }

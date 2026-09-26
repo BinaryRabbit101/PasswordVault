@@ -4,6 +4,7 @@ use App\Models\Item;
 use App\Models\User;
 use App\Services\Import\LastPassCsvParser;
 use App\Services\Import\LastPassImporter;
+use Illuminate\Support\Facades\Crypt;
 
 function fixtureCsv(): string
 {
@@ -59,8 +60,9 @@ test('importing creates items and folders; re-importing skips everything', funct
         ->toContain('Sites', 'Finance\Banks', 'Notes');
 
     $bank = Item::firstWhere('name', 'My Bank');
-    expect($bank->password)->toBe('p@ss,word')
-        ->and($bank->totp_secret)->toBe('JBSWY3DPEHPK3PXP')
+    expect($bank->loginPassword())->toBe('p@ss,word')
+        ->and($bank->totpSecret())->toBe('JBSWY3DPEHPK3PXP')
+        ->and($bank->fields->pluck('label')->all())->toBe(['Username', 'Password', 'Website', 'One-time code', 'Notes'])
         ->and($bank->favorite)->toBeTrue()
         ->and($bank->folder->name)->toBe('Finance\Banks');
 
@@ -108,5 +110,5 @@ test('the cached import csv is encrypted, not plaintext', function () {
 
     expect($cached)->toBeString()
         ->and($cached)->not->toContain('hunter2')
-        ->and(\Illuminate\Support\Facades\Crypt::decryptString($cached))->toContain('hunter2');
+        ->and(Crypt::decryptString($cached))->toContain('hunter2');
 });

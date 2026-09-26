@@ -19,7 +19,7 @@ test('a member can fetch item secrets', function () {
     $this->actingAs($user)
         ->getJson(route('items.secrets', $item))
         ->assertOk()
-        ->assertJsonPath('password', $item->password)
+        ->assertJsonPath('password', $item->loginPassword())
         ->assertHeader('Cache-Control', 'no-store, private');
 });
 

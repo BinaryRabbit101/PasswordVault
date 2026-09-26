@@ -95,6 +95,7 @@ const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
             <span class="sr-only">Copy username</span>
         </button>
         <button
+            v-if="item.has_password"
             type="button"
             class="rounded-md p-2 text-muted-foreground hover:bg-background hover:text-foreground"
             title="Copy password"

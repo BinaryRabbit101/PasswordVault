@@ -20,8 +20,8 @@ class ItemFieldFactory extends Factory
             'item_id' => Item::factory(),
             'label' => fake()->word(),
             'type' => 'text',
+            'autofill' => null,
             'value' => fake()->sentence(),
-            'is_secret' => true,
             'sort_order' => 0,
         ];
     }

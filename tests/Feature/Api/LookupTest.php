@@ -16,12 +16,9 @@ test('lookup matches items by url host and returns the current totp code', funct
     $user = User::factory()->create();
     $user->forceFill(['device_token' => str_repeat('a', 48)])->save();
 
-    Item::factory()->withTotp()->create([
+    Item::factory()->login(url: 'https://www.example.com/login', username: 'jane', password: 'hunter2', totp: 'JBSWY3DPEHPK3PXP')->create([
         'vault_id' => $user->personalVault()->id,
         'name' => 'Example',
-        'url' => 'https://www.example.com/login',
-        'username' => 'jane',
-        'password' => 'hunter2',
     ]);
 
     $response = $this->getJson(
@@ -42,10 +39,9 @@ test('lookup only sees vaults the token owner belongs to', function () {
     $other = User::factory()->create();
     $owner->forceFill(['device_token' => str_repeat('b', 48)])->save();
 
-    Item::factory()->create([
+    Item::factory()->login(url: 'https://private.test')->create([
         'vault_id' => $other->personalVault()->id,
         'name' => 'Private',
-        'url' => 'https://private.test',
     ]);
 
     $this->getJson('/api/lookup?url=https://private.test', ['X-Device-Token' => str_repeat('b', 48)])
@@ -59,11 +55,9 @@ test('passwords are omitted when the config flag is off', function () {
     $user = User::factory()->create();
     $user->forceFill(['device_token' => str_repeat('c', 48)])->save();
 
-    Item::factory()->create([
+    Item::factory()->login(url: 'https://example.com', password: 'hunter2')->create([
         'vault_id' => $user->personalVault()->id,
         'name' => 'Example',
-        'url' => 'https://example.com',
-        'password' => 'hunter2',
     ]);
 
     $this->getJson('/api/lookup?q=example', ['X-Device-Token' => str_repeat('c', 48)])
@@ -76,12 +70,9 @@ test('fill token matches the request Origin across subdomains', function () {
     $user = User::factory()->create();
     $user->forceFill(['fill_token' => str_repeat('d', 48)])->save();
 
-    Item::factory()->create([
+    Item::factory()->login(url: 'https://www.example.com/login', username: 'jane', password: 'hunter2')->create([
         'vault_id' => $user->personalVault()->id,
         'name' => 'Example',
-        'url' => 'https://www.example.com/login',
-        'username' => 'jane',
-        'password' => 'hunter2',
     ]);
 
     // Origin is a login subdomain; the stored url is the bare domain.
@@ -96,17 +87,13 @@ test('fill token ignores a caller-supplied url and scopes to the Origin', functi
     $user = User::factory()->create();
     $user->forceFill(['fill_token' => str_repeat('e', 48)])->save();
 
-    Item::factory()->create([
+    Item::factory()->login(url: 'https://bank.example/login', password: 'secret')->create([
         'vault_id' => $user->personalVault()->id,
         'name' => 'Bank',
-        'url' => 'https://bank.example/login',
-        'password' => 'secret',
     ]);
-    Item::factory()->create([
+    Item::factory()->login(url: 'https://mail.test/login', password: 'other')->create([
         'vault_id' => $user->personalVault()->id,
         'name' => 'Mail',
-        'url' => 'https://mail.test/login',
-        'password' => 'other',
     ]);
 
     // Attacker-controlled page is mail.test but tries to pull bank.example.
@@ -128,18 +115,14 @@ test('a staged item is returned exactly and consumed on first use', function () 
     $user = User::factory()->create();
     $user->forceFill(['fill_token' => str_repeat('g', 48)])->save();
 
-    $picked = Item::factory()->create([
+    $picked = Item::factory()->login(url: 'https://google.com', username: 'work@example.com')->create([
         'vault_id' => $user->personalVault()->id,
         'name' => 'Work Google',
-        'url' => 'https://google.com',
-        'username' => 'work@example.com',
     ]);
     // Second account on the same domain — an Origin-only match is ambiguous.
-    Item::factory()->create([
+    Item::factory()->login(url: 'https://google.com', username: 'me@example.com')->create([
         'vault_id' => $user->personalVault()->id,
         'name' => 'Personal Google',
-        'url' => 'https://google.com',
-        'username' => 'me@example.com',
     ]);
 
     Cache::put("fill_stage:{$user->id}", ['item_id' => $picked->id, 'domain' => 'google.com'], now()->addMinute());
@@ -161,9 +144,8 @@ test('a staged item is ignored (and left intact) when the page domain differs', 
     $user = User::factory()->create();
     $user->forceFill(['fill_token' => str_repeat('h', 48)])->save();
 
-    $bank = Item::factory()->create([
+    $bank = Item::factory()->login(url: 'https://bank.example')->create([
         'vault_id' => $user->personalVault()->id,
-        'url' => 'https://bank.example',
     ]);
 
     Cache::put("fill_stage:{$user->id}", ['item_id' => $bank->id, 'domain' => 'bank.example'], now()->addMinute());
@@ -173,4 +155,20 @@ test('a staged item is ignored (and left intact) when the page domain differs', 
         ->assertJsonCount(0, 'matches');
 
     expect(Cache::get("fill_stage:{$user->id}"))->not->toBeNull();
+});
+
+test('lookup matches any website field, not just the first', function () {
+    $user = User::factory()->create();
+    $user->forceFill(['device_token' => str_repeat('i', 48)])->save();
+
+    Item::factory()->withFields([
+        ['label' => 'Username', 'type' => 'text', 'value' => 'bot'],
+        ['label' => 'Portal', 'type' => 'url', 'value' => 'https://discord.com/developers'],
+        ['label' => 'Status page', 'type' => 'url', 'value' => 'https://discordstatus.com'],
+    ])->create(['vault_id' => $user->personalVault()->id, 'name' => 'Bot']);
+
+    $this->getJson('/api/lookup?url=https://discordstatus.com', ['X-Device-Token' => str_repeat('i', 48)])
+        ->assertOk()
+        ->assertJsonCount(1, 'matches')
+        ->assertJsonPath('matches.0.url', 'https://discord.com/developers');
 });

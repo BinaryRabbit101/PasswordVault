@@ -10,10 +10,9 @@ test('staging requires authentication', function () {
 
 test('staging stores the item id and its registrable domain for the user', function () {
     $user = User::factory()->create();
-    $item = Item::factory()->create([
+    $item = Item::factory()->login(url: 'https://www.example.com/login')->create([
         'vault_id' => $user->personalVault()->id,
         'name' => 'Example',
-        'url' => 'https://www.example.com/login',
     ]);
 
     $this->actingAs($user)
@@ -28,9 +27,8 @@ test('staging stores the item id and its registrable domain for the user', funct
 test('staging an item in another user\'s vault is rejected', function () {
     $user = User::factory()->create();
     $other = User::factory()->create();
-    $item = Item::factory()->create([
+    $item = Item::factory()->login(url: 'https://example.com')->create([
         'vault_id' => $other->personalVault()->id,
-        'url' => 'https://example.com',
     ]);
 
     $this->actingAs($user)
@@ -42,9 +40,8 @@ test('staging an item in another user\'s vault is rejected', function () {
 
 test('staging an item without a website is rejected', function () {
     $user = User::factory()->create();
-    $item = Item::factory()->create([
+    $item = Item::factory()->login(username: 'jane', password: 'secret')->create([
         'vault_id' => $user->personalVault()->id,
-        'url' => null,
     ]);
 
     $this->actingAs($user)

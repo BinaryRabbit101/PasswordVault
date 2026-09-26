@@ -16,18 +16,14 @@ test('exported csv round-trips through the parser', function () {
     $user = User::factory()->create();
     $vault = $user->personalVault();
 
-    $item = Item::factory()->withTotp()->favorite()->create([
-        'vault_id' => $vault->id,
-        'name' => 'Round Trip',
-        'url' => 'https://roundtrip.test',
-        'username' => 'jane',
-        'password' => "tricky,\"password\"\nwith newline",
-        'notes' => "line one\nline two",
-    ]);
-    $item->fields()->create([
-        'label' => 'PIN', 'type' => 'password', 'value' => '9876',
-        'is_secret' => true, 'sort_order' => 0,
-    ]);
+    Item::factory()->favorite()->withFields([
+        ['label' => 'Username', 'type' => 'text', 'value' => 'jane'],
+        ['label' => 'Password', 'type' => 'password', 'value' => "tricky,\"password\"\nwith newline"],
+        ['label' => 'Website', 'type' => 'url', 'value' => 'https://roundtrip.test'],
+        ['label' => 'One-time code', 'type' => 'totp', 'value' => 'JBSWY3DPEHPK3PXP'],
+        ['label' => 'PIN', 'type' => 'password', 'value' => '9876'],
+        ['label' => 'Notes', 'type' => 'note', 'value' => "line one\nline two"],
+    ])->create(['vault_id' => $vault->id, 'name' => 'Round Trip']);
 
     $response = $this->actingAs($user)
         ->withSession(['auth.password_confirmed_at' => time()])
@@ -45,10 +41,12 @@ test('exported csv round-trips through the parser', function () {
     $row = $parsed->rows->first();
 
     expect($row->name)->toBe('Round Trip')
+        ->and($row->url)->toBe('https://roundtrip.test')
         ->and($row->username)->toBe('jane')
         ->and($row->password)->toBe("tricky,\"password\"\nwith newline")
         ->and($row->totp)->toBe('JBSWY3DPEHPK3PXP')
         ->and($row->favorite)->toBeTrue()
         ->and($row->notes)->toContain('line two')
-        ->and($row->notes)->toContain('PIN: 9876');
+        ->and($row->notes)->toContain('PIN: 9876')
+        ->and($row->notes)->not->toContain('tricky');
 });

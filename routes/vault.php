@@ -25,7 +25,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('items/{item}', [ItemController::class, 'update'])->name('items.update');
     Route::delete('items/{item}', [ItemController::class, 'destroy'])->name('items.destroy');
     Route::get('items/{item}/secrets', [ItemController::class, 'secrets'])->name('items.secrets');
-    Route::get('items/{item}/password-history', [ItemController::class, 'passwordHistory'])->name('items.password-history');
+    Route::get('items/{item}/fields/{field}/history', [ItemController::class, 'fieldHistory'])->name('items.fields.history');
 
     Route::post('fill/stage', [FillStageController::class, 'store'])->name('fill.stage');
 

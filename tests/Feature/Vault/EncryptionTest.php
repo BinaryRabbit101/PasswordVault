@@ -4,25 +4,24 @@ use App\Models\Item;
 use App\Models\ItemField;
 use Illuminate\Support\Facades\DB;
 
-test('item secrets are encrypted at rest', function () {
-    $item = Item::factory()->create([
-        'username' => 'jane@example.com',
-        'password' => 'super-secret-password',
-        'notes' => 'private notes',
-        'totp_secret' => 'JBSWY3DPEHPK3PXP',
-    ]);
+test('field values and the derived username are encrypted at rest', function () {
+    $item = Item::factory()
+        ->login('jane@example.com', 'super-secret-password', totp: 'JBSWY3DPEHPK3PXP', notes: 'private notes')
+        ->create();
 
-    $raw = DB::table('items')->where('id', $item->id)->first();
+    foreach ($item->fields as $field) {
+        $raw = DB::table('item_fields')->where('id', $field->id)->value('value');
 
-    foreach (['username', 'password', 'notes', 'totp_secret'] as $column) {
-        expect($raw->{$column})->not->toContain($item->{$column});
+        expect($raw)->not->toContain($field->value);
     }
+
+    expect(DB::table('items')->where('id', $item->id)->value('username'))->not->toContain('jane@example.com');
 
     $fresh = $item->fresh();
     expect($fresh->username)->toBe('jane@example.com')
-        ->and($fresh->password)->toBe('super-secret-password')
-        ->and($fresh->notes)->toBe('private notes')
-        ->and($fresh->totp_secret)->toBe('JBSWY3DPEHPK3PXP');
+        ->and($fresh->loginPassword())->toBe('super-secret-password')
+        ->and($fresh->totpSecret())->toBe('JBSWY3DPEHPK3PXP')
+        ->and($fresh->fields->firstWhere('type', 'note')->value)->toBe('private notes');
 });
 
 test('custom field values are encrypted at rest', function () {
@@ -35,26 +34,12 @@ test('custom field values are encrypted at rest', function () {
 });
 
 test('dedup hash is stable across saves and ignores case', function () {
-    $item = Item::factory()->create([
-        'name' => 'Example',
-        'url' => 'https://example.com',
-        'username' => 'Jane',
-    ]);
+    $item = Item::factory()->login('Jane', 'pw', 'https://example.com')->create(['name' => 'Example']);
 
     $hash = $item->dedup_hash;
 
-    $item->update(['notes' => 'changed something else']);
+    $item->update(['favorite' => true]);
 
     expect($item->fresh()->dedup_hash)->toBe($hash)
         ->and(Item::dedupHashFor('EXAMPLE', 'https://EXAMPLE.com', 'jane'))->toBe($hash);
-});
-
-test('changing the password bumps password_updated_at', function () {
-    $item = Item::factory()->create(['password' => 'first']);
-    $original = $item->password_updated_at;
-
-    $this->travel(1)->hours();
-    $item->update(['password' => 'second']);
-
-    expect($item->fresh()->password_updated_at->gt($original))->toBeTrue();
 });

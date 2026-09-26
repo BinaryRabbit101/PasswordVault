@@ -67,16 +67,17 @@ class LastPassImporter
                         ])->id;
                     }
 
-                    $vault->items()->create([
+                    $fields = Item::loginFields($row->username, $row->password, $row->url, $row->totp, $row->notes);
+
+                    $item = new Item([
                         'folder_id' => $folderId,
                         'name' => $row->name,
-                        'url' => $row->url,
-                        'username' => $row->username,
-                        'password' => $row->password,
-                        'notes' => $row->notes,
-                        'totp_secret' => $row->totp,
                         'favorite' => $row->favorite,
                     ]);
+                    $item->vault_id = $vault->id;
+                    $item->applyDerived($fields);
+                    $item->save();
+                    $item->syncFields($fields);
 
                     $existingHashes->put($hash, 1);
                     $imported++;

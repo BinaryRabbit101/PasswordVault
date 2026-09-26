@@ -92,7 +92,7 @@ class LookupController extends Controller
             ->whereIn('vault_id', Vault::forUser($user)->pluck('id'))
             ->where(function ($q) use ($needle) {
                 $q->where('name', 'like', "%{$needle}%")
-                    ->orWhere('url', 'like', "%{$needle}%");
+                    ->orWhere('urls', 'like', "%{$needle}%");
             })
             ->orderBy('name')
             ->limit(10)
@@ -125,14 +125,18 @@ class LookupController extends Controller
      */
     private function matches(iterable $items, bool $includePasswords): JsonResponse
     {
-        $data = collect($items)->map(fn (Item $item) => array_filter([
-            'id' => $item->id,
-            'name' => $item->name,
-            'url' => $item->url,
-            'username' => $item->username,
-            'password' => $includePasswords ? $item->password : null,
-            'totp' => $item->totp_secret !== null ? Totp::code($item->totp_secret) : null,
-        ], fn ($value) => $value !== null))->values();
+        $data = collect($items)->map(function (Item $item) use ($includePasswords) {
+            $totp = $item->totpSecret();
+
+            return array_filter([
+                'id' => $item->id,
+                'name' => $item->name,
+                'url' => $item->url,
+                'username' => $item->username,
+                'password' => $includePasswords ? $item->loginPassword() : null,
+                'totp' => $totp !== null ? Totp::code($totp) : null,
+            ], fn ($value) => $value !== null);
+        })->values();
 
         return response()
             ->json(['matches' => $data])

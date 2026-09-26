@@ -13,21 +13,21 @@ test('registering a user auto-creates their personal vault', function () {
         ->and($vault->type)->toBe('personal');
 });
 
-test('an item can be created with folder, totp and custom fields', function () {
+test('an item can be created with folder and fields', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
         ->post(route('items.store'), [
             'vault_id' => $user->personalVault()->id,
             'name' => 'Chase Bank',
-            'url' => 'https://chase.com',
-            'username' => 'jane@example.com',
-            'password' => 'hunter2',
             'folder' => 'Finance',
             'favorite' => true,
-            'totp_secret' => 'otpauth://totp/Chase:jane?secret=JBSWY3DPEHPK3PXP&issuer=Chase',
             'fields' => [
-                ['label' => 'PIN', 'type' => 'password', 'value' => '1234', 'is_secret' => true],
+                ['label' => 'Email', 'type' => 'email', 'value' => 'jane@example.com'],
+                ['label' => 'Password', 'type' => 'password', 'value' => 'hunter2'],
+                ['label' => 'Website', 'type' => 'url', 'value' => 'https://chase.com'],
+                ['label' => '2FA', 'type' => 'totp', 'value' => 'otpauth://totp/Chase:jane?secret=JBSWY3DPEHPK3PXP&issuer=Chase'],
+                ['label' => 'PIN', 'type' => 'password', 'value' => '1234'],
             ],
         ])
         ->assertRedirect(route('vault.index'));
@@ -36,9 +36,33 @@ test('an item can be created with folder, totp and custom fields', function () {
 
     expect($item->folder->name)->toBe('Finance')
         ->and($item->favorite)->toBeTrue()
-        ->and($item->totp_secret)->toBe('JBSWY3DPEHPK3PXP')
-        ->and($item->fields)->toHaveCount(1)
-        ->and($item->fields->first()->value)->toBe('1234');
+        ->and($item->url)->toBe('https://chase.com')
+        ->and($item->username)->toBe('jane@example.com')
+        ->and($item->loginPassword())->toBe('hunter2')
+        ->and($item->totpSecret())->toBe('JBSWY3DPEHPK3PXP')
+        ->and($item->fields->pluck('label')->all())->toBe(['Email', 'Password', 'Website', '2FA', 'PIN']);
+});
+
+test('an item needs no username or password', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('items.store'), [
+            'vault_id' => $user->personalVault()->id,
+            'name' => 'Discord bot',
+            'fields' => [
+                ['label' => 'Application ID', 'type' => 'text', 'value' => '1234567890', 'autofill' => 'none'],
+                ['label' => 'Bot token', 'type' => 'password', 'value' => 'MTIz.abc.def', 'autofill' => 'none'],
+                ['label' => 'Portal', 'type' => 'url', 'value' => 'https://discord.com/developers/applications'],
+            ],
+        ])
+        ->assertRedirect(route('vault.index'));
+
+    $item = Item::firstWhere('name', 'Discord bot');
+
+    expect($item->username)->toBeNull()
+        ->and($item->loginPassword())->toBeNull()
+        ->and($item->fields)->toHaveCount(3);
 });
 
 test('creating an identical item in the same vault is rejected', function () {
@@ -48,8 +72,10 @@ test('creating an identical item in the same vault is rejected', function () {
     $payload = [
         'vault_id' => $vaultId,
         'name' => 'Example',
-        'url' => 'https://example.com',
-        'username' => 'jane',
+        'fields' => [
+            ['label' => 'Username', 'type' => 'text', 'value' => 'jane'],
+            ['label' => 'Website', 'type' => 'url', 'value' => 'https://example.com'],
+        ],
     ];
 
     $this->actingAs($user)->post(route('items.store'), $payload)->assertRedirect();
@@ -60,17 +86,17 @@ test('creating an identical item in the same vault is rejected', function () {
     expect(Item::where('vault_id', $vaultId)->count())->toBe(1);
 });
 
-test('an item can be updated and its fields replaced', function () {
+test('updating keeps a field whose id is sent and replaces the rest', function () {
     $user = User::factory()->create();
-    $item = Item::factory()->create(['vault_id' => $user->personalVault()->id]);
-    $item->fields()->create(['label' => 'Old', 'type' => 'text', 'value' => 'old', 'is_secret' => false, 'sort_order' => 0]);
+    $item = Item::factory()->login('jane', 'old-password')->create(['vault_id' => $user->personalVault()->id]);
+    [$username, $password] = $item->fields->all();
 
     $this->actingAs($user)
         ->put(route('items.update', $item), [
             'name' => 'Renamed',
-            'password' => 'new-password',
             'fields' => [
-                ['label' => 'New', 'type' => 'text', 'value' => 'new', 'is_secret' => false],
+                ['id' => $password->id, 'label' => 'Password', 'type' => 'password', 'value' => 'new-password'],
+                ['label' => 'Recovery code', 'type' => 'password', 'value' => 'abc-123', 'autofill' => 'none'],
             ],
         ])
         ->assertRedirect(route('vault.index'));
@@ -78,9 +104,30 @@ test('an item can be updated and its fields replaced', function () {
     $fresh = $item->fresh();
 
     expect($fresh->name)->toBe('Renamed')
-        ->and($fresh->password)->toBe('new-password')
-        ->and($fresh->fields)->toHaveCount(1)
-        ->and($fresh->fields->first()->label)->toBe('New');
+        ->and($fresh->username)->toBeNull()
+        ->and($fresh->loginPassword())->toBe('new-password')
+        ->and($fresh->fields->pluck('label')->all())->toBe(['Password', 'Recovery code'])
+        ->and($fresh->fields->first()->id)->toBe($password->id)
+        ->and($username->fresh())->toBeNull();
+});
+
+test('a field id from another item is treated as a new field', function () {
+    $user = User::factory()->create();
+    $mine = Item::factory()->create(['vault_id' => $user->personalVault()->id]);
+    $theirs = Item::factory()->login('them', 'their-password')->create();
+    $foreign = $theirs->fields->first();
+
+    $this->actingAs($user)
+        ->put(route('items.update', $mine), [
+            'name' => $mine->name,
+            'fields' => [
+                ['id' => $foreign->id, 'label' => 'Stolen', 'type' => 'text', 'value' => 'x'],
+            ],
+        ])
+        ->assertRedirect();
+
+    expect($foreign->fresh()->label)->toBe('Username')
+        ->and($mine->fresh()->fields->first()->id)->not->toBe($foreign->id);
 });
 
 test('an item can be soft deleted', function () {
@@ -102,7 +149,9 @@ test('an invalid totp secret is rejected', function () {
         ->post(route('items.store'), [
             'vault_id' => $user->personalVault()->id,
             'name' => 'Bad TOTP',
-            'totp_secret' => 'not!valid@base32',
+            'fields' => [
+                ['label' => 'One-time code', 'type' => 'totp', 'value' => 'not!valid@base32'],
+            ],
         ])
-        ->assertSessionHasErrors('totp_secret');
+        ->assertSessionHasErrors('fields.0.value');
 });
