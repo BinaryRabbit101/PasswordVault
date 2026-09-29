@@ -1,12 +1,13 @@
 <?php
 
-// Browser tests: DuskTestCase brings DatabaseMigrations (see tests/DuskTestCase.php).
-pest()->extend(DuskTestCase::class)
-    ->in('Browser');
-
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\DuskTestCase;
 use Tests\TestCase;
+
+// Browser tests: DuskTestCase brings DatabaseMigrations (see tests/DuskTestCase.php).
+// Keep this below the imports — above them, DuskTestCase resolves to the global namespace.
+pest()->extend(DuskTestCase::class)
+    ->in('Browser');
 
 /*
 |--------------------------------------------------------------------------

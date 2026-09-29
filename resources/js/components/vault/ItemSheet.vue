@@ -406,6 +406,9 @@ const MASK = '••••••••••••';
         <SheetContent
             side="bottom"
             class="max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:mx-auto sm:max-w-lg"
+            @interact-outside="
+                (event: Event) => editing && event.preventDefault()
+            "
         >
             <SheetHeader class="text-left">
                 <SheetTitle>
