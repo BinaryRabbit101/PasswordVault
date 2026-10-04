@@ -78,3 +78,27 @@ test('the list and the new-item sheet fit a phone screen', function () {
         $this->assertNoHorizontalOverflow($browser, 'The new-item sheet');
     });
 });
+
+test('quick-copy buttons are captioned with the name of the field they copy', function () {
+    $user = User::factory()->create();
+
+    $api = Item::factory()->withFields([
+        ['label' => 'Client ID', 'type' => 'text', 'value' => 'abc-123'],
+        ['label' => 'API token', 'type' => 'password', 'value' => 'tok-456'],
+        ['label' => 'Website', 'type' => 'url', 'value' => 'https://example.com'],
+    ])->create(['vault_id' => $user->personalVault()->id, 'name' => 'Some API']);
+
+    $this->browse(function (Browser $browser) use ($user, $api) {
+        $browser->loginAs($user)
+            ->visit('/vault')
+            ->waitFor($this->row($api))
+            ->assertSeeIn($this->row($api).' [data-test="item-autofill"]', 'Fill')
+            ->assertSeeIn($this->row($api).' [data-test="item-copy-username"]', 'Client ID')
+            ->assertSeeIn($this->row($api).' [data-test="item-copy-password"]', 'API token')
+            ->assertDontSeeIn($this->row($api).' [data-test="item-copy-password"]', 'Password');
+
+        $this->settle($browser)
+            ->click($this->row($api).' [data-test="item-copy-password"]')
+            ->waitForText('API token copied');
+    });
+});

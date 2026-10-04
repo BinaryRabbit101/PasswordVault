@@ -10,6 +10,7 @@ use App\Models\Item;
 use App\Models\ItemField;
 use App\Models\ItemFieldHistory;
 use App\Models\Vault;
+use App\Support\FieldRoles;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -31,23 +32,35 @@ class ItemController extends Controller
 
         $items = Item::query()
             ->whereIn('vault_id', $vaults->modelKeys())
-            // Types only — no field value is decrypted for the list.
-            ->with(['folder:id,name', 'fields:id,item_id,type,autofill'])
+            // Labels and types only — no field value is loaded or decrypted
+            // for the list, just whether it is filled.
+            ->with(['folder:id,name', 'fields' => fn ($query) => $query
+                ->select(['id', 'item_id', 'label', 'type', 'autofill'])
+                ->selectRaw('value is not null as filled')])
             ->orderBy('name')
             ->get()
-            ->map(fn (Item $item) => [
-                'id' => $item->id,
-                'vault_id' => $item->vault_id,
-                'name' => $item->name,
-                'url' => $item->url,
-                'username' => $item->username,
-                'folder' => $item->folder?->name,
-                'favorite' => $item->favorite,
-                'has_password' => $item->fields->contains(
-                    fn (ItemField $field) => $field->autofill === ItemField::AUTOFILL_PASSWORD
-                        || ($field->autofill === null && $field->type === 'password'),
-                ),
-            ]);
+            ->map(function (Item $item) {
+                $fields = $item->fields->map(fn (ItemField $field) => [
+                    'label' => $field->label,
+                    'type' => $field->type,
+                    'autofill' => $field->autofill,
+                    'value' => $field->getAttribute('filled') ? 'filled' : null,
+                ]);
+
+                return [
+                    'id' => $item->id,
+                    'vault_id' => $item->vault_id,
+                    'name' => $item->name,
+                    'url' => $item->url,
+                    'username' => $item->username,
+                    'folder' => $item->folder?->name,
+                    'favorite' => $item->favorite,
+                    // What the quick-copy buttons copy, by the field's own
+                    // name; null means there is nothing to copy.
+                    'username_label' => FieldRoles::usernameLabel($fields),
+                    'password_label' => FieldRoles::passwordLabel($fields),
+                ];
+            });
 
         return Inertia::render('vault/Index', [
             'vaults' => $vaults->map(fn (Vault $vault) => [

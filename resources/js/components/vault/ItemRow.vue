@@ -37,6 +37,10 @@ const avatarClass = computed(() => {
     return AVATAR_CLASSES[hash % AVATAR_CLASSES.length];
 });
 
+const ACTION_CLASS =
+    'flex w-13 flex-col items-center gap-0.5 rounded-md px-0.5 py-1.5 text-muted-foreground hover:bg-background hover:text-foreground';
+const CAPTION_CLASS = 'block w-full truncate text-center text-[10px] leading-3';
+
 const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
 </script>
 
@@ -78,40 +82,51 @@ const initial = computed(() => props.item.name.charAt(0).toUpperCase() || '?');
             </span>
         </button>
 
-        <a
-            v-if="item.url"
-            :href="externalHref(item.url)"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="rounded-md p-2 text-muted-foreground hover:bg-background hover:text-foreground"
-            title="Open site & autofill"
-            data-test="item-autofill"
-            @click="emit('autofill')"
-        >
-            <WandSparkles class="size-4" />
-            <span class="sr-only">Open site and autofill</span>
-        </a>
-        <button
-            v-if="item.username"
-            type="button"
-            class="rounded-md p-2 text-muted-foreground hover:bg-background hover:text-foreground"
-            title="Copy username"
-            data-test="item-copy-username"
-            @click="emit('copyUsername')"
-        >
-            <Copy class="size-4" />
-            <span class="sr-only">Copy username</span>
-        </button>
-        <button
-            v-if="item.has_password"
-            type="button"
-            class="rounded-md p-2 text-muted-foreground hover:bg-background hover:text-foreground"
-            title="Copy password"
-            data-test="item-copy-password"
-            @click="emit('copyPassword')"
-        >
-            <KeyRound class="size-4" />
-            <span class="sr-only">Copy password</span>
-        </button>
+        <!-- Each quick button wears a caption: the copy ones are named after
+             the field they copy, so a token never passes for a password. -->
+        <div class="flex shrink-0 items-stretch">
+            <a
+                v-if="item.url"
+                :href="externalHref(item.url)"
+                target="_blank"
+                rel="noopener noreferrer"
+                :class="ACTION_CLASS"
+                title="Open site & autofill"
+                data-test="item-autofill"
+                @click="emit('autofill')"
+            >
+                <WandSparkles class="size-4" />
+                <span :class="CAPTION_CLASS" aria-hidden="true">Fill</span>
+                <span class="sr-only">Open site and autofill</span>
+            </a>
+            <button
+                v-if="item.username && item.username_label"
+                type="button"
+                :class="ACTION_CLASS"
+                :title="`Copy ${item.username_label}`"
+                data-test="item-copy-username"
+                @click="emit('copyUsername')"
+            >
+                <Copy class="size-4" />
+                <span :class="CAPTION_CLASS" aria-hidden="true">{{
+                    item.username_label
+                }}</span>
+                <span class="sr-only">Copy {{ item.username_label }}</span>
+            </button>
+            <button
+                v-if="item.password_label"
+                type="button"
+                :class="ACTION_CLASS"
+                :title="`Copy ${item.password_label}`"
+                data-test="item-copy-password"
+                @click="emit('copyPassword')"
+            >
+                <KeyRound class="size-4" />
+                <span :class="CAPTION_CLASS" aria-hidden="true">{{
+                    item.password_label
+                }}</span>
+                <span class="sr-only">Copy {{ item.password_label }}</span>
+            </button>
+        </div>
     </div>
 </template>

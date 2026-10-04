@@ -12,7 +12,10 @@ export interface VaultItem {
     username: string | null;
     folder: string | null;
     favorite: boolean;
-    has_password: boolean;
+    /** The name of the field quick-copy treats as the username, if any. */
+    username_label: string | null;
+    /** The name of the field quick-copy treats as the password, if any. */
+    password_label: string | null;
 }
 
 export type FieldType = 'text' | 'password' | 'email' | 'url' | 'totp' | 'note';

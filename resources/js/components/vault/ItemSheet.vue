@@ -29,6 +29,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import CopyButton from '@/components/vault/CopyButton.vue';
 import PasswordGenerator from '@/components/vault/PasswordGenerator.vue';
 import TotpCode from '@/components/vault/TotpCode.vue';
 import { useClipboard } from '@/composables/useClipboard';
@@ -453,29 +454,46 @@ const MASK = '••••••••••••';
                         </button>
                     </div>
 
+                    <!-- Every value is plain selectable text with its copy
+                         button on the left; nothing copies on a stray tap. -->
                     <TotpCode
                         v-if="field.type === 'totp'"
                         :secret="field.value!"
+                        :label="field.label"
                         @copy="(code) => copy(field.label, code)"
                     />
 
-                    <button
+                    <div
                         v-else-if="field.type === 'note'"
-                        type="button"
-                        class="block w-full rounded-md bg-muted px-3 py-2 text-left text-sm whitespace-pre-wrap hover:bg-accent"
-                        title="Tap to copy"
-                        data-test="view-field-value"
-                        @click="copy(field.label, field.value!)"
+                        class="flex items-start gap-2"
                     >
-                        {{ field.value }}
-                    </button>
+                        <CopyButton
+                            :label="field.label"
+                            data-test="view-field-copy"
+                            @click="copy(field.label, field.value!)"
+                        />
+                        <p
+                            class="min-w-0 flex-1 rounded-md bg-muted px-3 py-2 text-sm break-words whitespace-pre-wrap select-text"
+                            data-test="view-field-value"
+                        >
+                            {{ field.value }}
+                        </p>
+                    </div>
 
-                    <div v-else-if="field.type === 'url'">
+                    <div
+                        v-else-if="field.type === 'url'"
+                        class="flex items-center gap-2"
+                    >
+                        <CopyButton
+                            :label="field.label"
+                            data-test="view-field-copy"
+                            @click="copy(field.label, field.value!)"
+                        />
                         <a
                             :href="externalHref(field.value!)"
                             target="_blank"
                             rel="noopener noreferrer"
-                            class="block truncate text-sm underline underline-offset-4"
+                            class="block min-w-0 flex-1 truncate text-sm underline underline-offset-4"
                             data-test="view-field-value"
                         >
                             {{ field.value }}
@@ -483,12 +501,14 @@ const MASK = '••••••••••••';
                     </div>
 
                     <div v-else class="flex items-center gap-2">
-                        <button
-                            type="button"
-                            class="min-w-0 flex-1 truncate rounded-md bg-muted px-3 py-2 text-left font-mono text-sm hover:bg-accent"
-                            title="Tap to copy"
-                            data-test="view-field-value"
+                        <CopyButton
+                            :label="field.label"
+                            data-test="view-field-copy"
                             @click="copy(field.label, field.value!)"
+                        />
+                        <span
+                            class="min-w-0 flex-1 rounded-md bg-muted px-3 py-2 font-mono text-sm break-all select-text"
+                            data-test="view-field-value"
                         >
                             {{
                                 field.type === 'password' &&
@@ -496,7 +516,7 @@ const MASK = '••••••••••••';
                                     ? MASK
                                     : field.value
                             }}
-                        </button>
+                        </span>
                         <Button
                             v-if="field.type === 'password'"
                             type="button"
@@ -644,74 +664,104 @@ const MASK = '••••••••••••';
                             </select>
                         </div>
 
-                        <textarea
-                            v-if="field.type === 'note'"
-                            v-model="field.value"
-                            rows="3"
-                            :aria-label="field.label || 'Value'"
-                            data-test="field-value"
-                            class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
-                        ></textarea>
-
                         <div
-                            v-else-if="field.type === 'password'"
-                            class="relative"
+                            class="flex gap-2"
+                            :class="
+                                field.type === 'note'
+                                    ? 'items-start'
+                                    : 'items-center'
+                            "
                         >
+                            <CopyButton
+                                :label="field.label || 'value'"
+                                :disabled="!field.value"
+                                data-test="field-copy"
+                                @click="
+                                    copy(
+                                        field.label || 'Value',
+                                        field.value ?? '',
+                                    )
+                                "
+                            />
+
+                            <textarea
+                                v-if="field.type === 'note'"
+                                v-model="field.value"
+                                rows="3"
+                                :aria-label="field.label || 'Value'"
+                                data-test="field-value"
+                                class="min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+                            ></textarea>
+
+                            <div
+                                v-else-if="field.type === 'password'"
+                                class="relative min-w-0 flex-1"
+                            >
+                                <Input
+                                    :model-value="field.value ?? ''"
+                                    :type="
+                                        revealed.has(field.key)
+                                            ? 'text'
+                                            : 'password'
+                                    "
+                                    :aria-label="field.label || 'Value'"
+                                    data-test="field-value"
+                                    autocomplete="off"
+                                    class="pr-10 font-mono"
+                                    @update:model-value="
+                                        (v) => (field.value = String(v))
+                                    "
+                                />
+                                <button
+                                    type="button"
+                                    class="absolute inset-y-0 right-0 flex items-center rounded-r-md px-3 text-muted-foreground hover:text-foreground"
+                                    :aria-label="
+                                        revealed.has(field.key)
+                                            ? 'Hide'
+                                            : 'Show'
+                                    "
+                                    data-test="field-reveal"
+                                    @click="
+                                        revealed = toggle(revealed, field.key)
+                                    "
+                                >
+                                    <EyeOff
+                                        v-if="revealed.has(field.key)"
+                                        class="size-4"
+                                    />
+                                    <Eye v-else class="size-4" />
+                                </button>
+                            </div>
+
                             <Input
+                                v-else
                                 :model-value="field.value ?? ''"
                                 :type="
-                                    revealed.has(field.key)
-                                        ? 'text'
-                                        : 'password'
+                                    field.type === 'email' ? 'email' : 'text'
+                                "
+                                :inputmode="
+                                    field.type === 'url' ? 'url' : undefined
+                                "
+                                :placeholder="
+                                    field.type === 'totp'
+                                        ? 'Base32 secret or otpauth:// link'
+                                        : field.type === 'url'
+                                          ? 'https://example.com'
+                                          : ''
                                 "
                                 :aria-label="field.label || 'Value'"
                                 data-test="field-value"
+                                autocapitalize="none"
                                 autocomplete="off"
-                                class="pr-10 font-mono"
+                                class="min-w-0 flex-1"
+                                :class="
+                                    field.type === 'text' ? '' : 'font-mono'
+                                "
                                 @update:model-value="
                                     (v) => (field.value = String(v))
                                 "
                             />
-                            <button
-                                type="button"
-                                class="absolute inset-y-0 right-0 flex items-center rounded-r-md px-3 text-muted-foreground hover:text-foreground"
-                                :aria-label="
-                                    revealed.has(field.key) ? 'Hide' : 'Show'
-                                "
-                                data-test="field-reveal"
-                                @click="revealed = toggle(revealed, field.key)"
-                            >
-                                <EyeOff
-                                    v-if="revealed.has(field.key)"
-                                    class="size-4"
-                                />
-                                <Eye v-else class="size-4" />
-                            </button>
                         </div>
-
-                        <Input
-                            v-else
-                            :model-value="field.value ?? ''"
-                            :type="field.type === 'email' ? 'email' : 'text'"
-                            :inputmode="
-                                field.type === 'url' ? 'url' : undefined
-                            "
-                            :placeholder="
-                                field.type === 'totp'
-                                    ? 'Base32 secret or otpauth:// link'
-                                    : field.type === 'url'
-                                      ? 'https://example.com'
-                                      : ''
-                            "
-                            :aria-label="field.label || 'Value'"
-                            data-test="field-value"
-                            autocapitalize="none"
-                            autocomplete="off"
-                            :class="field.type === 'text' ? '' : 'font-mono'"
-                            @update:model-value="
-                                (v) => (field.value = String(v))
-                            "
-                        />
 
                         <p
                             v-if="fieldErrors[`fields.${index}.value`]"
@@ -872,7 +922,7 @@ const MASK = '••••••••••••';
             <DialogHeader>
                 <DialogTitle>{{ historyField?.label }} history</DialogTitle>
                 <DialogDescription>
-                    The last 10 values this field held. Tap one to copy it.
+                    The last 10 values this field held.
                 </DialogDescription>
             </DialogHeader>
 
@@ -890,17 +940,19 @@ const MASK = '••••••••••••';
                         formatHistoryDate(entry.created_at)
                     }}</Label>
                     <div class="flex items-center gap-2">
-                        <button
-                            type="button"
-                            class="min-w-0 flex-1 truncate rounded-md bg-muted px-3 py-2 text-left font-mono text-sm hover:bg-accent"
-                            title="Tap to copy"
-                            data-test="history-value"
+                        <CopyButton
+                            :label="`previous ${historyField?.label ?? 'value'}`"
+                            data-test="history-copy"
                             @click="
                                 copy(
                                     `Previous ${historyField?.label ?? 'value'}`,
                                     entry.value,
                                 )
                             "
+                        />
+                        <span
+                            class="min-w-0 flex-1 rounded-md bg-muted px-3 py-2 font-mono text-sm break-all select-text"
+                            data-test="history-value"
                         >
                             {{
                                 historyField?.type === 'password' &&
@@ -908,7 +960,7 @@ const MASK = '••••••••••••';
                                     ? MASK
                                     : entry.value
                             }}
-                        </button>
+                        </span>
                         <Button
                             v-if="historyField?.type === 'password'"
                             type="button"

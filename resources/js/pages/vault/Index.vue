@@ -108,7 +108,7 @@ const openCreate = () => {
 
 const copyUsername = (item: VaultItem) => {
     if (item.username) {
-        void copy('Username', item.username);
+        void copy(item.username_label ?? 'Username', item.username);
     }
 };
 
@@ -116,7 +116,7 @@ const copyUsername = (item: VaultItem) => {
 // so iOS Safari accepts the write once the fetch resolves.
 const copyPassword = (item: VaultItem) => {
     void copy(
-        'Password',
+        item.password_label ?? 'Password',
         fetch(secrets.url(item.id), {
             headers: { Accept: 'application/json' },
             credentials: 'same-origin',

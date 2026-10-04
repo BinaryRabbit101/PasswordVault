@@ -23,7 +23,7 @@ final class FieldRoles
      */
     public static function username(iterable $fields): ?string
     {
-        return self::role($fields, ItemField::AUTOFILL_USERNAME, ['email', 'text']);
+        return self::role($fields, ItemField::AUTOFILL_USERNAME, ['email', 'text'])['value'] ?? null;
     }
 
     /**
@@ -31,7 +31,26 @@ final class FieldRoles
      */
     public static function password(iterable $fields): ?string
     {
-        return self::role($fields, ItemField::AUTOFILL_PASSWORD, ['password']);
+        return self::role($fields, ItemField::AUTOFILL_PASSWORD, ['password'])['value'] ?? null;
+    }
+
+    /**
+     * What the owner called the field that plays the username — "Email",
+     * "Client ID" — so a copy button can say what it copies.
+     *
+     * @param  iterable<ItemField|array<string, mixed>>  $fields
+     */
+    public static function usernameLabel(iterable $fields): ?string
+    {
+        return self::role($fields, ItemField::AUTOFILL_USERNAME, ['email', 'text'])['label'] ?? null;
+    }
+
+    /**
+     * @param  iterable<ItemField|array<string, mixed>>  $fields
+     */
+    public static function passwordLabel(iterable $fields): ?string
+    {
+        return self::role($fields, ItemField::AUTOFILL_PASSWORD, ['password'])['label'] ?? null;
     }
 
     /**
@@ -54,20 +73,21 @@ final class FieldRoles
     /**
      * @param  iterable<ItemField|array<string, mixed>>  $fields
      * @param  list<string>  $autoTypes
+     * @return array{label: string, type: string, value: string|null, autofill: string|null}|null
      */
-    private static function role(iterable $fields, string $role, array $autoTypes): ?string
+    private static function role(iterable $fields, string $role, array $autoTypes): ?array
     {
         $rows = self::rows($fields);
 
         foreach ($rows as $row) {
             if ($row['autofill'] === $role && $row['value'] !== null) {
-                return $row['value'];
+                return $row;
             }
         }
 
         foreach ($rows as $row) {
             if ($row['autofill'] === null && in_array($row['type'], $autoTypes, true) && $row['value'] !== null) {
-                return $row['value'];
+                return $row;
             }
         }
 
@@ -93,17 +113,18 @@ final class FieldRoles
 
     /**
      * @param  iterable<ItemField|array<string, mixed>>  $fields
-     * @return list<array{type: string, value: string|null, autofill: string|null}>
+     * @return list<array{label: string, type: string, value: string|null, autofill: string|null}>
      */
     private static function rows(iterable $fields): array
     {
         $rows = [];
 
         foreach ($fields as $field) {
-            $row = $field instanceof ItemField ? $field->only(['type', 'value', 'autofill']) : $field;
+            $row = $field instanceof ItemField ? $field->only(['label', 'type', 'value', 'autofill']) : $field;
             $value = $row['value'] ?? null;
 
             $rows[] = [
+                'label' => (string) ($row['label'] ?? ''),
                 'type' => (string) ($row['type'] ?? 'text'),
                 'value' => is_string($value) && $value !== '' ? $value : null,
                 'autofill' => $row['autofill'] ?? null,

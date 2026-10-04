@@ -47,3 +47,16 @@ test('urls and totp come from their field types', function () {
     expect(FieldRoles::urls($fields))->toBe(['https://a.test', 'https://b.test'])
         ->and(FieldRoles::totp($fields))->toBe('JBSWY3DPEHPK3PXP');
 });
+
+test('the role labels name the same fields the values come from', function () {
+    $fields = [
+        ['label' => 'Display name', 'type' => 'text', 'value' => ''],
+        ['label' => 'Client ID', 'type' => 'text', 'value' => 'abc'],
+        ['label' => 'Old key', 'type' => 'password', 'value' => 'old'],
+        ['label' => 'API token', 'type' => 'password', 'value' => 'tok', 'autofill' => 'password'],
+    ];
+
+    expect(FieldRoles::usernameLabel($fields))->toBe('Client ID')
+        ->and(FieldRoles::passwordLabel($fields))->toBe('API token')
+        ->and(FieldRoles::passwordLabel([['label' => 'Bot token', 'type' => 'password', 'value' => 'x', 'autofill' => 'none']]))->toBeNull();
+});

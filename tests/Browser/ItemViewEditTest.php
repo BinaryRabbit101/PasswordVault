@@ -135,3 +135,34 @@ test('an item can be deleted after confirming', function () {
     expect(Item::find($item->id))->toBeNull()
         ->and(Item::withTrashed()->find($item->id))->not->toBeNull();
 });
+
+test('every field has a copy button on its left, and its value is plain selectable text', function () {
+    $user = User::factory()->create();
+    $item = loginItemFor($user);
+
+    $this->browse(function (Browser $browser) use ($user, $item) {
+        $browser->loginAs($user)->visit('/vault');
+
+        $this->openItem($browser, $item)
+            ->assertPresent('@view-field-0 @view-field-copy')
+            ->assertPresent('@view-field-2 @view-field-copy')
+            ->click('@view-field-1 @view-field-copy')
+            ->waitForText('Password copied');
+
+        // The value itself is text to highlight, not a button, and the copy
+        // button sits before it.
+        [$tag, $copyFirst] = $browser->script([
+            'return document.querySelector(\'[data-test="view-field-0"] [data-test="view-field-value"]\').tagName;',
+            'const c = document.querySelector(\'[data-test="view-field-0"] [data-test="view-field-copy"]\');'
+            .'const v = document.querySelector(\'[data-test="view-field-0"] [data-test="view-field-value"]\');'
+            .'return c.getBoundingClientRect().left < v.getBoundingClientRect().left;',
+        ]);
+
+        expect($tag)->toBe('SPAN')->and($copyFirst)->toBeTrue();
+
+        $browser->click('@item-edit')
+            ->waitFor('@field-0')
+            ->click('@field-0 @field-copy')
+            ->waitForText('Username copied');
+    });
+});
