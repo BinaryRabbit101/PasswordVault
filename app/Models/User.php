@@ -6,6 +6,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -110,5 +111,17 @@ class User extends Authenticatable implements PasskeyUser
         if (! in_array($column, self::PHONE_TOKENS, true)) {
             throw new \InvalidArgumentException("Unknown phone token column: {$column}");
         }
+    }
+
+    /**
+     * Emails are always stored lowercase and trimmed (SQLite `=` is case-sensitive).
+     *
+     * @return Attribute<string, string>
+     */
+    protected function email(): Attribute
+    {
+        return Attribute::make(
+            set: fn (string $value): string => Str::lower(trim($value)),
+        );
     }
 }

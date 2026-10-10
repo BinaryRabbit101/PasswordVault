@@ -16,7 +16,7 @@ class ShareVault extends Command
 
     public function handle(): int
     {
-        $email = (string) $this->argument('user');
+        $email = strtolower(trim((string) $this->argument('user')));
         $user = User::where('email', $email)->first();
 
         if (! $user) {

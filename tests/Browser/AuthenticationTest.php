@@ -43,3 +43,18 @@ test('a wrong password is refused', function () {
             ->assertPathIs('/login');
     });
 });
+
+test('signing in with a phone-capitalised email still lands on the vault', function () {
+    User::factory()->create(['email' => 'kim@example.com']);
+
+    $this->browse(function (Browser $browser) {
+        $this->settle($browser->logout()->visit('/login'))
+            ->assertAttribute('#email', 'autocapitalize', 'none')
+            ->assertAttribute('#email', 'autocomplete', 'email')
+            ->type('#email', 'Kim@Example.com')
+            ->type('#password', 'password')
+            ->click('@login-button')
+            ->waitForLocation('/vault')
+            ->assertPresent('@vault-search');
+    });
+});
