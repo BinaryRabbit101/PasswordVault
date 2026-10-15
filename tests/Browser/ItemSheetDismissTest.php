@@ -22,6 +22,23 @@ function clickBackdrop(Browser $browser): Browser
     return $browser->pause(400);
 }
 
+/**
+ * Switch to another app and back, as on a phone: the page goes hidden, then
+ * visible again (Chrome never hides a Dusk tab on its own, so fake both events).
+ */
+function leaveAndReturn(Browser $browser): Browser
+{
+    foreach (['hidden', 'visible'] as $state) {
+        $browser->script(
+            "Object.defineProperty(document, 'visibilityState', { value: '{$state}', configurable: true });"
+            ."document.dispatchEvent(new Event('visibilitychange'));"
+        );
+        $browser->pause(200);
+    }
+
+    return $browser->pause(300);
+}
+
 function dismissItemFor(User $user): Item
 {
     return Item::factory()
@@ -69,5 +86,35 @@ test('clicking away still closes an item that is only being viewed', function ()
         $this->openItem($browser, $item);
 
         clickBackdrop($browser)->waitUntilMissing('@item-edit');
+    });
+});
+
+test('leaving the app and coming back keeps a new item open', function () {
+    $user = User::factory()->create();
+
+    $this->browse(function (Browser $browser) use ($user) {
+        $this->openNewItem($browser->loginAs($user))->type('@item-name', 'Half typed');
+
+        leaveAndReturn($browser)
+            ->assertVisible('@item-name')
+            ->assertInputValue('@item-name', 'Half typed');
+    });
+});
+
+test('leaving the app and coming back keeps an item being edited open', function () {
+    $user = User::factory()->create();
+    $item = dismissItemFor($user);
+
+    $this->browse(function (Browser $browser) use ($user, $item) {
+        $browser->loginAs($user)->visit('/vault');
+
+        $this->openItem($browser, $item)
+            ->click('@item-edit')
+            ->waitFor('@field-0')
+            ->type('@field-0 @field-value', 'work@example.com');
+
+        leaveAndReturn($browser)
+            ->assertVisible('@field-0')
+            ->assertInputValue('@field-0 @field-value', 'work@example.com');
     });
 });

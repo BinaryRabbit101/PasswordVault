@@ -235,17 +235,12 @@ watch(
  * Auto-lock's `onHide`: drop revealed secrets from memory without closing
  * the sheet, so returning to the tab doesn't lose your place in the list.
  *
- * A create/edit form in progress has no "masked" view to fall back to, so
- * that case still closes the sheet outright — same as before this existed.
+ * A create/edit form in progress is left exactly as it is: leaving the app to
+ * paste a username, then coming back for the password, is the normal way to
+ * fill one in on a phone, so closing it would throw the typing away.
  */
 const lock = () => {
-    if (!props.open) {
-        return;
-    }
-
-    if (editing.value) {
-        emit('update:open', false);
-
+    if (!props.open || editing.value) {
         return;
     }
 
