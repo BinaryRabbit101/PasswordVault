@@ -21,28 +21,33 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
         .replace(/_/g, '/');
     const rawData = window.atob(base64);
     const output = new Uint8Array(rawData.length);
+
     for (let i = 0; i < rawData.length; ++i) {
         output[i] = rawData.charCodeAt(i);
     }
+
     return output;
 }
 
+// Device state is shared by every caller (the top-of-page banner and the
+// Import page's switch), so subscribing in one place updates the other.
+const isSupported = ref(
+    typeof window !== 'undefined' &&
+        'serviceWorker' in navigator &&
+        'PushManager' in window &&
+        'Notification' in window,
+);
+const isSubscribed = ref(false);
+// False until this device's subscription has been looked up once, so nothing
+// offers "Turn on" to a device that turns out to be subscribed already.
+const checked = ref(false);
+const permission = ref<NotificationPermission>(
+    isSupported.value ? Notification.permission : 'denied',
+);
+const isBusy = ref(false);
+
 export function usePush() {
     const page = usePage();
-
-    // Feature support: needs SW + Push API + Notifications, all in a secure context.
-    const isSupported = ref(
-        typeof window !== 'undefined' &&
-            'serviceWorker' in navigator &&
-            'PushManager' in window &&
-            'Notification' in window,
-    );
-
-    const isSubscribed = ref(false);
-    const permission = ref<NotificationPermission>(
-        isSupported.value ? Notification.permission : 'denied',
-    );
-    const isBusy = ref(false);
     const error = ref<string | null>(null);
 
     async function getRegistration(): Promise<ServiceWorkerRegistration> {
@@ -50,12 +55,16 @@ export function usePush() {
     }
 
     async function refresh() {
-        if (!isSupported.value) return;
+        if (!isSupported.value) {
+            return;
+        }
+
         try {
             const reg = await getRegistration();
             const sub = await reg.pushManager.getSubscription();
             isSubscribed.value = !!sub;
             permission.value = Notification.permission;
+            checked.value = true;
         } catch {
             // Non-fatal: leave state as-is.
         }
@@ -67,25 +76,32 @@ export function usePush() {
         if (!isSupported.value) {
             error.value =
                 'Push notifications are not supported in this browser.';
+
             return false;
         }
 
         const vapidPublicKey = page.props.vapidPublicKey as string | null;
+
         if (!vapidPublicKey) {
             error.value = 'Server is missing a VAPID public key.';
+
             return false;
         }
 
         isBusy.value = true;
+
         try {
             permission.value = await Notification.requestPermission();
+
             if (permission.value !== 'granted') {
                 error.value = 'Notification permission was not granted.';
+
                 return false;
             }
 
             const reg = await getRegistration();
             let sub = await reg.pushManager.getSubscription();
+
             if (!sub) {
                 sub = await reg.pushManager.subscribe({
                     userVisibleOnly: true,
@@ -118,16 +134,19 @@ export function usePush() {
 
             if (!res.ok) {
                 error.value = 'Could not save the subscription on the server.';
+
                 return false;
             }
 
             isSubscribed.value = true;
+
             return true;
         } catch (e) {
             error.value =
                 e instanceof Error
                     ? e.message
                     : 'Failed to enable notifications.';
+
             return false;
         } finally {
             isBusy.value = false;
@@ -136,12 +155,17 @@ export function usePush() {
 
     async function unsubscribe(): Promise<boolean> {
         error.value = null;
-        if (!isSupported.value) return false;
+
+        if (!isSupported.value) {
+            return false;
+        }
 
         isBusy.value = true;
+
         try {
             const reg = await getRegistration();
             const sub = await reg.pushManager.getSubscription();
+
             if (sub) {
                 await fetch('/push/subscribe', {
                     method: 'DELETE',
@@ -151,13 +175,16 @@ export function usePush() {
                 });
                 await sub.unsubscribe();
             }
+
             isSubscribed.value = false;
+
             return true;
         } catch (e) {
             error.value =
                 e instanceof Error
                     ? e.message
                     : 'Failed to disable notifications.';
+
             return false;
         } finally {
             isBusy.value = false;
@@ -169,6 +196,7 @@ export function usePush() {
     return {
         isSupported,
         isSubscribed,
+        checked,
         permission,
         isBusy,
         error,
